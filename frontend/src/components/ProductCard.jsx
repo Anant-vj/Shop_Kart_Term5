@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Tag, Package, ArrowRight, Heart, Loader2 } from 'lucide-react';
+import { Tag, Package, ArrowRight, Heart, Loader2, ShoppingCart } from 'lucide-react';
 import { toggleWishlist } from '../services/api';
+import { useCart } from '../context/CartContext';
 
 const ProductCard = ({ product, isWishlisted = false, onWishlistToggle }) => {
   if (!product) return null;
 
+  const { addToCart, getItemQuantity } = useCart();
   const [saved, setSaved] = useState(isWishlisted);
   const [loading, setLoading] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
@@ -17,6 +20,8 @@ const ProductCard = ({ product, isWishlisted = false, onWishlistToggle }) => {
 
   const isOutOfStock = product.stock <= 0;
   const isLowStock = product.stock > 0 && product.stock <= 5;
+  const cartQty = getItemQuantity(product._id);
+  const isInCart = cartQty > 0;
 
   const handleWishlistToggle = async (e) => {
     e.preventDefault();
@@ -65,6 +70,29 @@ const ProductCard = ({ product, isWishlisted = false, onWishlistToggle }) => {
     }
   };
 
+  // Task 7: Add to Cart Handler
+  const handleAddToCart = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (addingToCart || isOutOfStock) return;
+
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setAddingToCart(true);
+
+    try {
+      await addToCart(product._id);
+      setSuccessMsg('🛒 Added to Cart');
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Unable to add to cart.');
+      setTimeout(() => setErrorMsg(null), 4000);
+    } finally {
+      setAddingToCart(false);
+    }
+  };
+
   return (
     <article className="product-card" id={`product-${product._id}`}>
       {/* Product Image & Top Overlays */}
@@ -87,7 +115,7 @@ const ProductCard = ({ product, isWishlisted = false, onWishlistToggle }) => {
           <span>{product.category}</span>
         </span>
 
-        {/* Floating Heart Icon Button on Image (Section 4 layout: ♡) */}
+        {/* Floating Heart Icon Button on Image */}
         <button
           type="button"
           onClick={handleWishlistToggle}
@@ -141,7 +169,35 @@ const ProductCard = ({ product, isWishlisted = false, onWishlistToggle }) => {
           </div>
         )}
 
-        {/* Action Buttons Row: [ View Details ] [ ♡ Wishlist ] */}
+        {/* Primary Action: Task 7 - Add to Cart */}
+        <button
+          type="button"
+          onClick={handleAddToCart}
+          disabled={addingToCart || isOutOfStock}
+          className={`btn-card-add-to-cart ${isInCart ? 'in-cart' : ''} ${addingToCart ? 'loading' : ''}`}
+          id={`add-to-cart-${product._id}`}
+        >
+          {addingToCart ? (
+            <>
+              <Loader2 size={15} className="spinner-icon" />
+              <span>Adding...</span>
+            </>
+          ) : isOutOfStock ? (
+            <span>Out of Stock</span>
+          ) : isInCart ? (
+            <>
+              <ShoppingCart size={15} />
+              <span>Add Another ({cartQty})</span>
+            </>
+          ) : (
+            <>
+              <ShoppingCart size={15} />
+              <span>Add to Cart</span>
+            </>
+          )}
+        </button>
+
+        {/* Secondary Actions: [ View Details ] & [ ♡ Wishlist ] */}
         <div className="product-card-actions">
           <Link
             to={`/products/${product._id}`}
@@ -149,10 +205,9 @@ const ProductCard = ({ product, isWishlisted = false, onWishlistToggle }) => {
             id={`view-details-${product._id}`}
           >
             <span>View Details</span>
-            <ArrowRight size={15} />
+            <ArrowRight size={14} />
           </Link>
 
-          {/* Task 5: Wishlist Action Button with required state texts */}
           <button
             type="button"
             onClick={handleWishlistToggle}
@@ -162,18 +217,18 @@ const ProductCard = ({ product, isWishlisted = false, onWishlistToggle }) => {
           >
             {loading ? (
               <>
-                <Loader2 size={14} className="spinner-icon" />
-                <span>⏳ Saving...</span>
+                <Loader2 size={13} className="spinner-icon" />
+                <span>Saving...</span>
               </>
             ) : saved ? (
               <>
-                <Heart size={14} fill="#f43f5e" color="#f43f5e" />
-                <span>♥ Added to Wishlist</span>
+                <Heart size={13} fill="#f43f5e" color="#f43f5e" />
+                <span>Saved</span>
               </>
             ) : (
               <>
-                <Heart size={14} />
-                <span>♡ Wishlist</span>
+                <Heart size={13} />
+                <span>Wishlist</span>
               </>
             )}
           </button>

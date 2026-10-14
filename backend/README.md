@@ -1,6 +1,6 @@
-# ShopKart Backend API — Authentication, Catalog & Wishlist (Labs 01, 03 & 04)
+# ShopKart Backend API — Authentication, Catalog, Wishlist & Cart (Labs 01–05)
 
-[![Backend Tests](https://img.shields.io/badge/Backend%20Tests-38%20Passed-success.svg)](test/test-runner.js)
+[![Backend Tests](https://img.shields.io/badge/Backend%20Tests-50%20Passed-success.svg)](test/test-runner.js)
 [![Node.js](https://img.shields.io/badge/Node.js-v18%2B-green.svg)](https://nodejs.org/)
 [![Express.js](https://img.shields.io/badge/Express.js-4.21.2-lightgrey.svg)](https://expressjs.com/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose%208-brightgreen.svg)](https://mongoosejs.com/)
@@ -15,17 +15,19 @@ backend/
 ├── controllers/
 │   ├── customer.controller.js  # Auth handlers (register, login, profile, logout, change-password)
 │   ├── product.controller.js   # Product handlers (create, list with search/filter/sort, single item)
-│   └── wishlist.controller.js  # Wishlist handlers (add, get with populate, remove, toggle)
+│   ├── wishlist.controller.js  # Wishlist handlers (add, get with populate, remove, toggle)
+│   └── cart.controller.js      # Cart handlers (add/increment, get populated, update qty, remove)
 │
 ├── models/
-│   ├── customer.model.js       # Customer schema, wishlist ObjectId refs, bcrypt hashing
+│   ├── customer.model.js       # Customer schema (wishlist & cart references, bcrypt hashing)
 │   ├── user.model.js           # User/Customer compatibility bridge
 │   └── product.model.js        # Product schema, price > 0, stock >= 0 validations
 │
 ├── routes/
 │   ├── customer.routes.js      # Customer REST routes with protection middleware
 │   ├── product.routes.js       # Product REST routes (/products, /products/:id)
-│   └── wishlist.routes.js      # Protected wishlist REST routes (/wishlist)
+│   ├── wishlist.routes.js      # Protected wishlist REST routes (/wishlist)
+│   └── cart.routes.js          # Protected shopping cart REST routes (/cart)
 │
 ├── middlewares/
 │   └── auth.middleware.js      # JWT cookie & Bearer token verification, req.user attachment
@@ -35,7 +37,7 @@ backend/
 │   └── seedProducts.js         # Realistic product catalogue seeder
 │
 ├── test/
-│   └── test-runner.js          # Automated test runner (38 test assertions)
+│   └── test-runner.js          # Automated test runner (50 test assertions)
 │
 ├── .env                        # Backend environment configuration
 ├── .env.example                # Example configuration template
@@ -62,14 +64,20 @@ backend/
 - `GET /products/:id`: Fetches a single product by MongoDB ObjectId with 400 (invalid ID format) and 404 (not found) error handling.
 
 ### 3. Wishlist Management APIs (Lab 04)
-All wishlist endpoints are protected by `protectRoute` middleware. The user identity is extracted strictly from the authenticated JWT session (`req.user`), never accepted from the request body or parameters.
+- `POST /wishlist/:productId`: Adds product ObjectId reference to user's wishlist (`409 Conflict` on duplicates).
+- `GET /wishlist`: Returns current user's populated wishlist items.
+- `DELETE /wishlist/:productId`: Removes product reference from user's wishlist.
+- `PATCH /wishlist/:productId/toggle`: Bonus Challenge toggle endpoint.
+
+### 4. Shopping Cart APIs (Lab 05)
+All cart routes are protected with `protectRoute`. User identity is derived strictly from `req.user`.
 
 | Method | Endpoint | Auth | Purpose | Status Codes |
 |---|---|:---:|---|:---:|
-| `POST` | `/wishlist/:productId` | ✅ | Add product ObjectId reference to user's wishlist | `200`, `400`, `401`, `404`, `409` |
-| `GET` | `/wishlist` | ✅ | Get current user's wishlist populated with product details | `200`, `401` |
-| `DELETE` | `/wishlist/:productId` | ✅ | Remove product reference from user's wishlist | `200`, `400`, `401`, `404` |
-| `PATCH` | `/wishlist/:productId/toggle` | ✅ | **Bonus (+10 Marks):** Toggle wishlist membership | `200`, `400`, `401`, `404` |
+| `POST` | `/cart/:productId` | ✅ | Add product to cart (or increment quantity if already present). Validates stock limits. | `200`, `400`, `401`, `404` |
+| `GET` | `/cart` | ✅ | Get current user's cart populated with Product details (`name`, `price`, `stock`, `image`, `category`). | `200`, `401` |
+| `PATCH` | `/cart/:productId` | ✅ | Update quantity for an existing cart item (`quantity >= 1`, `quantity <= stock`). | `200`, `400`, `401`, `404` |
+| `DELETE` | `/cart/:productId` | ✅ | Remove product item from user's cart. | `200`, `400`, `401`, `404` |
 
 ---
 
@@ -77,38 +85,38 @@ All wishlist endpoints are protected by `protectRoute` middleware. The user iden
 
 ```mermaid
 erDiagram
-    CUSTOMER ||--o{ PRODUCT : "wishlist references"
+    CUSTOMER ||--o{ CART_ITEM : owns
+    PRODUCT ||--o{ CART_ITEM : referenced_by
 
     CUSTOMER {
         ObjectId _id
         string fullName
         string email
-        string password
-        string phone
         ObjectId[] wishlist
+        CartItem[] cart
+    }
+
+    CART_ITEM {
+        ObjectId product
+        number quantity
     }
 
     PRODUCT {
         ObjectId _id
         string name
-        string description
         number price
+        number stock
         string category
         string image
-        number stock
     }
 ```
 
-### Why Store ObjectIds instead of Embedded Product Objects?
-1. **Single Source of Truth:** If product price, stock level, name, or image updates, the wishlist reflects the latest information immediately without stale data synchronization issues.
-2. **Document Size Optimization:** User documents remain compact. Storing full product snapshots would duplicate data across potentially thousands of users, bloating the database.
-3. **Mongoose `populate()`:** Allows the server to dynamically hydrate product details at read time using:
-   ```javascript
-   User.findById(userId).populate({
-     path: 'wishlist',
-     select: 'name description price category image stock createdAt'
-   });
-   ```
+### Why Cart Needs Quantity While Wishlist Does Not
+A **Wishlist** is a binary bookmarking system (*"I like this"* vs *"I don't"*). Storing an `ObjectId` is sufficient.  
+A **Shopping Cart** represents a pre-purchase commitment where the user decides *how many units* to purchase right now. Therefore, each cart entry must couple a `product` reference with a positive integer `quantity`.
+
+### Why Product Prices Are Not Copied into Cart
+Copying prices into the cart document introduces a **stale data anomaly**. If the store updates a price or runs a promotion, cart snapshots would show outdated numbers. Referencing the `Product` collection ensures all pricing and inventory remain linked directly to the database single source of truth.
 
 ---
 
@@ -116,7 +124,8 @@ erDiagram
 ```bash
 npm test
 ```
-Runs the automated test runner ([test/test-runner.js](test/test-runner.js)) verifying **38 test assertions**:
+Runs the automated test runner ([test/test-runner.js](test/test-runner.js)) verifying **50 test assertions**:
 - 18 Authentication & Cookie Session tests (Lab 01)
 - 9 Product Catalog & Filtering tests (Lab 03)
-- 11 Wishlist Model, Validation, Conflict Prevention & Populate tests (Lab 04)
+- 11 Wishlist Model, Validation & Populate tests (Lab 04)
+- 12 Shopping Cart Schema, Increment, Stock Limitation, Quantity Update & Removal tests (Lab 05)

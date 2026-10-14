@@ -15,15 +15,18 @@ import {
   Loader2,
 } from 'lucide-react';
 import { fetchProductById, getWishlist, toggleWishlist } from '../services/api';
+import { useCart } from '../context/CartContext';
 
 const ProductDetails = ({ onWishlistCountChange }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { addToCart, getItemQuantity } = useCart();
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [addedNotice, setAddedNotice] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [wishlistNotice, setWishlistNotice] = useState(null);
@@ -83,9 +86,21 @@ const ProductDetails = ({ onWishlistCountChange }) => {
     };
   }, [id]);
 
-  const handleAddToCart = () => {
-    setAddedNotice(true);
-    setTimeout(() => setAddedNotice(false), 2500);
+  const handleAddToCart = async () => {
+    if (addingToCart || isOutOfStock) return;
+    setAddingToCart(true);
+    setAddedNotice(false);
+
+    try {
+      await addToCart(id);
+      setAddedNotice(true);
+      setTimeout(() => setAddedNotice(false), 3000);
+    } catch (err) {
+      setWishlistNotice({ type: 'error', text: err.message || 'Unable to add to cart.' });
+      setTimeout(() => setWishlistNotice(null), 4000);
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
   const handleWishlistToggle = async () => {
@@ -252,12 +267,28 @@ const ProductDetails = ({ onWishlistCountChange }) => {
           <div className="details-actions">
             <button
               type="button"
-              className="btn-add-to-cart"
+              className={`btn-add-to-cart ${addingToCart ? 'loading' : ''}`}
               onClick={handleAddToCart}
-              disabled={isOutOfStock}
+              disabled={addingToCart || isOutOfStock}
+              id={`details-add-to-cart-${product._id}`}
             >
-              <ShoppingCart size={20} />
-              <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
+              {addingToCart ? (
+                <>
+                  <Loader2 size={20} className="spinner-icon" />
+                  <span>Adding...</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingCart size={20} />
+                  <span>
+                    {isOutOfStock
+                      ? 'Out of Stock'
+                      : getItemQuantity(product._id) > 0
+                      ? `Add Another (${getItemQuantity(product._id)} in cart)`
+                      : 'Add to Cart'}
+                  </span>
+                </>
+              )}
             </button>
 
             <button

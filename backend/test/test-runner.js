@@ -33,6 +33,12 @@ const {
   removeFromWishlist,
   toggleWishlist,
 } = require('../controllers/wishlist.controller');
+const {
+  addToCart,
+  getCart,
+  updateQuantity,
+  removeFromCart,
+} = require('../controllers/cart.controller');
 
 let testsPassed = 0;
 let testsFailed = 0;
@@ -901,6 +907,320 @@ async function main() {
       assert.strictEqual(req.user.fullName, 'Bearer User');
     } finally {
       Customer.findById = originalFindById;
+    }
+  });
+
+  console.log('\n--- 16. Testing Cart Schema (Lab 05 Task 1) ---');
+  await runTest('Customer schema contains cart field with product ref and quantity min 1', async () => {
+    const cartPath = Customer.schema.path('cart');
+    assert.ok(cartPath, 'Customer schema must define a cart field');
+    assert.strictEqual(cartPath.instance, 'Array', 'cart must be an Array');
+    const productPath = cartPath.schema ? cartPath.schema.path('product') : Customer.schema.path('cart.0.product');
+    assert.ok(productPath, 'cart item must define a product field');
+    assert.strictEqual(productPath.options.ref, 'Product');
+    const quantityPath = cartPath.schema ? cartPath.schema.path('quantity') : Customer.schema.path('cart.0.quantity');
+    assert.ok(quantityPath, 'cart item must define a quantity field');
+    assert.strictEqual(quantityPath.options.default, 1);
+  });
+
+  console.log('\n--- 17. Testing Add to Cart (Lab 05 Task 2) ---');
+  await runTest('POST /cart/:productId rejects invalid ObjectId with 400', async () => {
+    const req = {
+      params: { productId: 'invalid-id' },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    await addToCart(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.message.includes('Invalid product ID'));
+  });
+
+  await runTest('POST /cart/:productId returns 404 when product not found', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    Product.findById = async () => null;
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await addToCart(req, res);
+      assert.strictEqual(res.statusCode, 404);
+      assert.strictEqual(res.body.success, false);
+    } finally {
+      Product.findById = originalFindProduct;
+    }
+  });
+
+  await runTest('POST /cart/:productId returns 400 when product is out of stock', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    Product.findById = async () => ({ _id: validProductId, stock: 0 });
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await addToCart(req, res);
+      assert.strictEqual(res.statusCode, 400);
+      assert.strictEqual(res.body.success, false);
+      assert.ok(res.body.message.includes('out of stock'));
+    } finally {
+      Product.findById = originalFindProduct;
+    }
+  });
+
+  await runTest('POST /cart/:productId adds new product with quantity = 1', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    const originalFindCustomer = Customer.findById;
+    let saved = false;
+
+    Product.findById = async () => ({ _id: validProductId, name: 'Wireless Mouse', stock: 10, price: 999 });
+
+    const userMock = {
+      _id: '507f1f77bcf86cd799439011',
+      cart: [],
+      save: async function () {
+        saved = true;
+        return this;
+      },
+      populate: async function () {
+        this.cart = [{ product: { _id: validProductId, name: 'Wireless Mouse', price: 999 }, quantity: 1 }];
+        return this;
+      },
+    };
+    Customer.findById = async () => userMock;
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await addToCart(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.cart.length, 1);
+      assert.strictEqual(res.body.cart[0].quantity, 1);
+      assert.strictEqual(saved, true);
+    } finally {
+      Product.findById = originalFindProduct;
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  await runTest('POST /cart/:productId re-adding same product increments quantity to 2', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    const originalFindCustomer = Customer.findById;
+
+    Product.findById = async () => ({ _id: validProductId, stock: 5 });
+
+    const userMock = {
+      _id: '507f1f77bcf86cd799439011',
+      cart: [{ product: new mongoose.Types.ObjectId(validProductId), quantity: 1 }],
+      save: async function () { return this; },
+      populate: async function () {
+        this.cart = [{ product: { _id: validProductId }, quantity: 2 }];
+        return this;
+      },
+    };
+    Customer.findById = async () => userMock;
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await addToCart(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.cart[0].quantity, 2);
+    } finally {
+      Product.findById = originalFindProduct;
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  await runTest('POST /cart/:productId rejects when incremented quantity exceeds stock (400)', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    const originalFindCustomer = Customer.findById;
+
+    Product.findById = async () => ({ _id: validProductId, stock: 2 });
+
+    const userMock = {
+      _id: '507f1f77bcf86cd799439011',
+      cart: [{ product: new mongoose.Types.ObjectId(validProductId), quantity: 2 }],
+    };
+    Customer.findById = async () => userMock;
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await addToCart(req, res);
+      assert.strictEqual(res.statusCode, 400);
+      assert.strictEqual(res.body.success, false);
+      assert.ok(res.body.message.includes('exceeds available stock'));
+    } finally {
+      Product.findById = originalFindProduct;
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  console.log('\n--- 18. Testing Get Cart (Lab 05 Task 3) ---');
+  await runTest('GET /cart returns populated cart items', async () => {
+    const originalFindCustomer = Customer.findById;
+    const mockCart = [
+      { product: { _id: '1', name: 'Keyboard', price: 2999, stock: 10 }, quantity: 2 },
+      { product: { _id: '2', name: 'Mouse', price: 1499, stock: 5 }, quantity: 1 },
+    ];
+
+    Customer.findById = () => ({
+      populate: async () => ({
+        cart: mockCart,
+      }),
+    });
+
+    const req = { user: { _id: '507f1f77bcf86cd799439011' } };
+    const res = createMockRes();
+
+    try {
+      await getCart(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.cart.length, 2);
+      assert.strictEqual(res.body.cart[0].product.name, 'Keyboard');
+      assert.strictEqual(res.body.cart[0].quantity, 2);
+    } finally {
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  console.log('\n--- 19. Testing Update Cart Quantity (Lab 05 Task 4) ---');
+  await runTest('PATCH /cart/:productId rejects invalid quantity (<1 or non-integer) with 400', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const req = {
+      params: { productId: validProductId },
+      body: { quantity: 0 },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    await updateQuantity(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(res.body.success, false);
+  });
+
+  await runTest('PATCH /cart/:productId rejects quantity exceeding stock with 400', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    const originalFindCustomer = Customer.findById;
+
+    Product.findById = async () => ({ _id: validProductId, stock: 3 });
+    Customer.findById = async () => ({
+      _id: '507f1f77bcf86cd799439011',
+      cart: [{ product: new mongoose.Types.ObjectId(validProductId), quantity: 1 }],
+    });
+
+    const req = {
+      params: { productId: validProductId },
+      body: { quantity: 10 },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await updateQuantity(req, res);
+      assert.strictEqual(res.statusCode, 400);
+      assert.strictEqual(res.body.success, false);
+      assert.ok(res.body.message.includes('exceeds available stock'));
+    } finally {
+      Product.findById = originalFindProduct;
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  await runTest('PATCH /cart/:productId updates quantity successfully (200)', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    const originalFindCustomer = Customer.findById;
+
+    Product.findById = async () => ({ _id: validProductId, stock: 10 });
+    const userMock = {
+      _id: '507f1f77bcf86cd799439011',
+      cart: [{ product: new mongoose.Types.ObjectId(validProductId), quantity: 1 }],
+      save: async function () { return this; },
+      populate: async function () {
+        this.cart = [{ product: { _id: validProductId }, quantity: 4 }];
+        return this;
+      },
+    };
+    Customer.findById = async () => userMock;
+
+    const req = {
+      params: { productId: validProductId },
+      body: { quantity: 4 },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await updateQuantity(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.cart[0].quantity, 4);
+    } finally {
+      Product.findById = originalFindProduct;
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  console.log('\n--- 20. Testing Remove from Cart (Lab 05 Task 5) ---');
+  await runTest('DELETE /cart/:productId removes item from cart and returns 200', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindCustomer = Customer.findById;
+
+    const userMock = {
+      _id: '507f1f77bcf86cd799439011',
+      cart: [{ product: new mongoose.Types.ObjectId(validProductId), quantity: 2 }],
+      save: async function () { return this; },
+      populate: async function () {
+        this.cart = [];
+        return this;
+      },
+    };
+    Customer.findById = async () => userMock;
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await removeFromCart(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.cart.length, 0);
+    } finally {
+      Customer.findById = originalFindCustomer;
     }
   });
 

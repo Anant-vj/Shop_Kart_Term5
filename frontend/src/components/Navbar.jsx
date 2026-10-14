@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { ShoppingBag, LogOut, LogIn, UserPlus, Grid, Heart } from 'lucide-react';
+import { ShoppingBag, LogOut, LogIn, UserPlus, Grid, Heart, ShoppingCart } from 'lucide-react';
 import { logoutCustomer } from '../services/api';
+import { useCart } from '../context/CartContext';
 
 const Navbar = ({ currentUser, onLogout, wishlistCount = 0 }) => {
   const navigate = useNavigate();
+  const { totalQuantity, clearCartState } = useCart();
 
   const handleLogout = async () => {
     try {
@@ -12,6 +14,7 @@ const Navbar = ({ currentUser, onLogout, wishlistCount = 0 }) => {
     } catch (err) {
       console.warn('Logout error (clearing local session anyway):', err.message);
     } finally {
+      clearCartState();
       if (onLogout) onLogout();
       navigate('/login');
     }
@@ -73,6 +76,26 @@ const Navbar = ({ currentUser, onLogout, wishlistCount = 0 }) => {
             </div>
           </NavLink>
 
+          {/* Task 8 & 16: Shopping Cart Navigation Link with Dynamic Count */}
+          <NavLink
+            to="/cart"
+            className={({ isActive }) => `nav-link nav-cart-link ${isActive ? 'active' : ''}`}
+            id="nav-cart-link"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <ShoppingCart size={16} className="nav-cart-icon" />
+              <span>
+                Cart
+                {currentUser && totalQuantity > 0 && ` (${totalQuantity})`}
+              </span>
+              {currentUser && totalQuantity > 0 && (
+                <span className="nav-count-badge nav-cart-badge" id="nav-cart-badge">
+                  {totalQuantity}
+                </span>
+              )}
+            </div>
+          </NavLink>
+
           {currentUser ? (
             <>
               <div className="user-badge" title={currentUser.email}>
@@ -82,7 +105,7 @@ const Navbar = ({ currentUser, onLogout, wishlistCount = 0 }) => {
                 <span className="user-name">{currentUser.fullName || 'Customer'}</span>
               </div>
 
-              {/* Task 4: Logout Button */}
+              {/* Logout Button */}
               <button
                 type="button"
                 onClick={handleLogout}

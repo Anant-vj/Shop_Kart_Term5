@@ -143,4 +143,48 @@ export const toggleWishlist = async (productId) => {
   return response.data;
 };
 
+/* ==========================================================================
+   Shopping Cart API Calls (Lab 05)
+   ========================================================================== */
+
+/**
+ * Task 2: Add product to current customer's cart (or increment quantity by 1)
+ * @param {string} productId - Product ObjectId
+ * @returns {Promise<Object>} { success, message, cart }
+ */
+export const addToCart = async (productId) => {
+  const response = await api.post(`/cart/${productId}`);
+  return response.data;
+};
+
+/**
+ * Task 3: Fetch current customer's cart populated with Product details
+ * @returns {Promise<Object>} { success, cart }
+ */
+export const getCart = async () => {
+  const response = await api.get('/cart');
+  return response.data;
+};
+
+/**
+ * Task 4: Update product quantity in cart
+ * @param {string} productId - Product ObjectId
+ * @param {number} quantity - New quantity (min 1, max product.stock)
+ * @returns {Promise<Object>} { success, message, cart }
+ */
+export const updateCartQuantity = async (productId, quantity) => {
+  const response = await api.patch(`/cart/${productId}`, { quantity });
+  return response.data;
+};
+
+/**
+ * Task 5: Remove product from current customer's cart
+ * @param {string} productId - Product ObjectId
+ * @returns {Promise<Object>} { success, message, cart }
+ */
+export const removeFromCart = async (productId) => {
+  const response = await api.delete(`/cart/${productId}`);
+  return response.data;
+};
+
 export default api;

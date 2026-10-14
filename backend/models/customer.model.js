@@ -38,6 +38,20 @@ const customerSchema = new mongoose.Schema(
         ref: 'Product',
       },
     ],
+    cart: [
+      {
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Product',
+          required: [true, 'Product reference is required'],
+        },
+        quantity: {
+          type: Number,
+          default: 1,
+          min: [1, 'Quantity cannot be less than 1'],
+        },
+      },
+    ],
     createdAt: {
       type: Date,
       default: Date.now,
