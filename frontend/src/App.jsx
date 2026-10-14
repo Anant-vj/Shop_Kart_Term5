@@ -8,6 +8,9 @@ import Products from './pages/Products';
 import ProductDetails from './pages/ProductDetails';
 import Wishlist from './pages/Wishlist';
 import Cart from './pages/Cart';
+import Checkout from './pages/Checkout';
+import OrderSuccess from './pages/OrderSuccess';
+import Orders from './pages/Orders';
 import { CartProvider } from './context/CartContext';
 import { getProfile, getWishlist } from './services/api';
 
@@ -102,6 +105,20 @@ function App() {
               <Route
                 path="/cart"
                 element={<Cart currentUser={currentUser} />}
+              />
+
+              {/* Lab 06: Checkout & Orders Routes */}
+              <Route
+                path="/checkout"
+                element={<Checkout currentUser={currentUser} />}
+              />
+              <Route
+                path="/order-success/:id"
+                element={<OrderSuccess currentUser={currentUser} />}
+              />
+              <Route
+                path="/orders"
+                element={<Orders currentUser={currentUser} />}
               />
 
               {/* Default Route redirects to /products or /home */}

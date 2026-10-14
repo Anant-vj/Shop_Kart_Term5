@@ -187,4 +187,58 @@ export const removeFromCart = async (productId) => {
   return response.data;
 };
 
+/* ==========================================================================
+   Order & Checkout API Calls (Lab 06)
+   ========================================================================== */
+
+/**
+ * Task 4: Create pending ShopKart order and Razorpay order
+ * @param {Object} shippingAddress - { fullName, phone, addressLine1, city, state, pincode }
+ * @returns {Promise<Object>} { success, shopKartOrderId, razorpayOrderId, amount, currency, key, order }
+ */
+export const createPaymentOrder = async (shippingAddress) => {
+  const response = await api.post('/orders/create-payment-order', { shippingAddress });
+  return response.data;
+};
+
+/**
+ * Task 4 & Step 11: Verify Razorpay Payment Signature
+ * @param {Object} paymentData - { shopKartOrderId, razorpay_order_id, razorpay_payment_id, razorpay_signature }
+ * @returns {Promise<Object>} { success, message, order }
+ */
+export const verifyPayment = async (paymentData) => {
+  const response = await api.post('/orders/verify-payment', paymentData);
+  return response.data;
+};
+
+/**
+ * Task 7: Fetch current customer's order history
+ * @returns {Promise<Object>} { success, count, orders }
+ */
+export const fetchUserOrders = async () => {
+  const response = await api.get('/orders');
+  return response.data;
+};
+
+/**
+ * Single Order API: Fetch order by ID
+ * @param {string} id - Order ObjectId
+ * @returns {Promise<Object>} { success, order }
+ */
+export const fetchOrderById = async (id) => {
+  const response = await api.get(`/orders/${id}`);
+  return response.data;
+};
+
+/**
+ * Bonus: Update order status (dev/admin simulation)
+ * @param {string} id - Order ObjectId
+ * @param {string} status - New status ('PLACED', 'CONFIRMED', 'SHIPPED', 'DELIVERED')
+ * @returns {Promise<Object>} { success, message, order }
+ */
+export const updateOrderStatus = async (id, status) => {
+  const response = await api.patch(`/orders/${id}/status`, { status });
+  return response.data;
+};
+
 export default api;

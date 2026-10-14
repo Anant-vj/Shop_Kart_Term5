@@ -39,6 +39,15 @@ const {
   updateQuantity,
   removeFromCart,
 } = require('../controllers/cart.controller');
+const crypto = require('crypto');
+const Order = require('../models/order.model');
+const {
+  createPaymentOrder,
+  verifyPayment,
+  getUserOrders,
+  getOrderById,
+  updateOrderStatus,
+} = require('../controllers/order.controller');
 
 let testsPassed = 0;
 let testsFailed = 0;
@@ -1221,6 +1230,407 @@ async function main() {
       assert.strictEqual(res.body.cart.length, 0);
     } finally {
       Customer.findById = originalFindCustomer;
+    }
+  });
+
+  console.log('\n--- 21. Testing Order Model Schema & Snapshot Requirements (Lab 06 Task 1) ---');
+  await runTest('Order schema defines all required snapshot fields and shipping address', async () => {
+    const paths = Order.schema.paths;
+    const itemPaths = paths['items'].schema.paths;
+    assert.ok(paths['user'], 'Order must reference user');
+    assert.ok(itemPaths['product'], 'Order item must reference product');
+    assert.ok(itemPaths['name'], 'Order item must snapshot product name');
+    assert.ok(itemPaths['price'], 'Order item must snapshot product price');
+    assert.ok(itemPaths['quantity'], 'Order item must store quantity');
+    assert.ok(paths['shippingAddress.fullName'], 'Shipping address must store fullName');
+    assert.ok(paths['shippingAddress.phone'], 'Shipping address must store phone');
+    assert.ok(paths['shippingAddress.addressLine1'], 'Shipping address must store addressLine1');
+    assert.ok(paths['shippingAddress.city'], 'Shipping address must store city');
+    assert.ok(paths['shippingAddress.state'], 'Shipping address must store state');
+    assert.ok(paths['shippingAddress.pincode'], 'Shipping address must store pincode');
+    assert.ok(paths['totalAmount'], 'Order must store totalAmount');
+    assert.ok(paths['paymentStatus'], 'Order must track paymentStatus');
+    assert.ok(paths['status'], 'Order must track fulfillment status');
+    assert.ok(paths['razorpayOrderId'], 'Order must store razorpayOrderId');
+    assert.ok(paths['razorpayPaymentId'], 'Order must store razorpayPaymentId');
+  });
+
+  console.log('\n--- 22. Testing Create Payment Order API (Lab 06 Task 4 & Business Rules) ---');
+  await runTest('Rejects checkout if cart is empty with 400', async () => {
+    const originalFindCustomer = Customer.findById;
+    Customer.findById = async () => ({
+      _id: '507f1f77bcf86cd799439011',
+      cart: [],
+    });
+
+    const req = {
+      body: {
+        shippingAddress: {
+          fullName: 'Aarav Sharma',
+          phone: '9876543210',
+          addressLine1: '22 MG Road',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          pincode: '560001',
+        },
+      },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await createPaymentOrder(req, res);
+      assert.strictEqual(res.statusCode, 400);
+      assert.strictEqual(res.body.success, false);
+      assert.ok(res.body.message.includes('Cart cannot be empty'));
+    } finally {
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  await runTest('Rejects checkout with invalid pincode (<6 digits or letters) with 400', async () => {
+    const req = {
+      body: {
+        shippingAddress: {
+          fullName: 'Aarav Sharma',
+          phone: '9876543210',
+          addressLine1: '22 MG Road',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          pincode: '5600', // invalid pincode
+        },
+      },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    await createPaymentOrder(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.message.includes('6 digits'));
+  });
+
+  await runTest('Rejects checkout if stock is insufficient with 400', async () => {
+    const productId = new mongoose.Types.ObjectId().toString();
+    const originalFindCustomer = Customer.findById;
+    const originalFindProduct = Product.findById;
+
+    Customer.findById = async () => ({
+      _id: '507f1f77bcf86cd799439011',
+      cart: [{ product: productId, quantity: 5 }],
+    });
+
+    Product.findById = async () => ({
+      _id: productId,
+      name: 'Mechanical Keyboard',
+      price: 2999,
+      stock: 2, // Stock is only 2, but requested 5!
+    });
+
+    const req = {
+      body: {
+        shippingAddress: {
+          fullName: 'Aarav Sharma',
+          phone: '9876543210',
+          addressLine1: '22 MG Road',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          pincode: '560001',
+        },
+      },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await createPaymentOrder(req, res);
+      assert.strictEqual(res.statusCode, 400);
+      assert.strictEqual(res.body.success, false);
+      assert.ok(res.body.message.includes('Insufficient stock'));
+    } finally {
+      Customer.findById = originalFindCustomer;
+      Product.findById = originalFindProduct;
+    }
+  });
+
+  await runTest('Ignores client fake total and calculates true total on backend (Task 4 & Rule 12)', async () => {
+    const p1Id = new mongoose.Types.ObjectId().toString();
+    const p2Id = new mongoose.Types.ObjectId().toString();
+
+    const originalFindCustomer = Customer.findById;
+    const originalFindProduct = Product.findById;
+    const originalOrderSave = Order.prototype.save;
+
+    Customer.findById = async () => ({
+      _id: '507f1f77bcf86cd799439011',
+      cart: [
+        { product: p1Id, quantity: 2 },
+        { product: p2Id, quantity: 1 },
+      ],
+    });
+
+    Product.findById = async (id) => {
+      if (id.toString() === p1Id.toString()) {
+        return { _id: p1Id, name: 'Mechanical Keyboard', price: 2999, stock: 10, image: 'kb.png' };
+      }
+      return { _id: p2Id, name: 'Gaming Mouse', price: 1499, stock: 10, image: 'mouse.png' };
+    };
+
+    let savedOrder = null;
+    Order.prototype.save = async function () {
+      this._id = this._id || 'mock-order-67abc123';
+      savedOrder = this;
+      return this;
+    };
+
+    // Client maliciously sends fake totalAmount: 1
+    const req = {
+      body: {
+        totalAmount: 1, // Fake total!
+        shippingAddress: {
+          fullName: 'Aarav Sharma',
+          phone: '9876543210',
+          addressLine1: '22 MG Road',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          pincode: '560001',
+        },
+      },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await createPaymentOrder(req, res);
+      assert.strictEqual(res.statusCode, 201);
+      assert.strictEqual(res.body.success, true);
+      // Expected total: 2999 * 2 + 1499 * 1 = 7497
+      assert.strictEqual(savedOrder.totalAmount, 7497, 'Backend must calculate real total (7497) and ignore fake total (1)');
+      // Amount in paise: 749700
+      assert.strictEqual(res.body.amount, 749700, 'Razorpay amount must be converted to paise');
+      assert.strictEqual(savedOrder.status, 'PENDING_PAYMENT');
+      assert.strictEqual(savedOrder.paymentStatus, 'PENDING');
+      assert.strictEqual(savedOrder.items.length, 2);
+      assert.strictEqual(savedOrder.items[0].name, 'Mechanical Keyboard');
+      assert.strictEqual(savedOrder.items[0].price, 2999);
+    } finally {
+      Customer.findById = originalFindCustomer;
+      Product.findById = originalFindProduct;
+      Order.prototype.save = originalOrderSave;
+    }
+  });
+
+  console.log('\n--- 23. Testing Razorpay Payment Verification & Cart Clearing (Lab 06 Task 5 & Step 12) ---');
+  await runTest('Rejects invalid payment signature with 400 and preserves cart', async () => {
+    const originalFindOrder = Order.findOne;
+    const originalFindCustomer = Customer.findById;
+
+    const mockOrder = {
+      _id: 'mock-order-67abc123',
+      user: '507f1f77bcf86cd799439011',
+      razorpayOrderId: 'order_ABC123',
+      paymentStatus: 'PENDING',
+      save: async function () { return this; },
+    };
+    Order.findOne = async () => mockOrder;
+
+    let cartCleared = false;
+    Customer.findById = async () => ({
+      _id: '507f1f77bcf86cd799439011',
+      cart: [{ product: 'prod-1', quantity: 1 }],
+      save: async function () { cartCleared = true; return this; },
+    });
+
+    const req = {
+      body: {
+        shopKartOrderId: new mongoose.Types.ObjectId().toString(),
+        razorpay_order_id: 'order_ABC123',
+        razorpay_payment_id: 'pay_XYZ123',
+        razorpay_signature: 'invalid_fraudulent_signature_value',
+      },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await verifyPayment(req, res);
+      assert.strictEqual(res.statusCode, 400);
+      assert.strictEqual(res.body.success, false);
+      assert.ok(res.body.message.includes('Invalid payment signature'));
+      assert.strictEqual(mockOrder.paymentStatus, 'FAILED');
+      assert.strictEqual(cartCleared, false, 'Cart must NOT be cleared when payment fails');
+    } finally {
+      Order.findOne = originalFindOrder;
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  await runTest('Verifies valid HMAC-SHA256 signature, marks order PAID + PLACED, and clears cart (200)', async () => {
+    const originalFindOrder = Order.findOne;
+    const originalFindCustomer = Customer.findById;
+    const originalFindProductAndUpdate = Product.findByIdAndUpdate;
+
+    const orderId = new mongoose.Types.ObjectId().toString();
+    const razorpayOrderId = 'order_VALID_123';
+    const razorpayPaymentId = 'pay_VALID_456';
+    const secret = process.env.RAZORPAY_KEY_SECRET || 'shopkart_test_secret_key_2026';
+
+    const validSignature = crypto
+      .createHmac('sha256', secret)
+      .update(razorpayOrderId + '|' + razorpayPaymentId)
+      .digest('hex');
+
+    const mockOrder = {
+      _id: orderId,
+      user: '507f1f77bcf86cd799439011',
+      razorpayOrderId: razorpayOrderId,
+      items: [{ product: new mongoose.Types.ObjectId().toString(), quantity: 2 }],
+      paymentStatus: 'PENDING',
+      status: 'PENDING_PAYMENT',
+      save: async function () { return this; },
+    };
+    Order.findOne = async () => mockOrder;
+
+    const mockCustomer = {
+      _id: '507f1f77bcf86cd799439011',
+      cart: [{ product: 'some-prod', quantity: 2 }],
+      save: async function () { return this; },
+    };
+    Customer.findById = async () => mockCustomer;
+    Product.findByIdAndUpdate = async () => ({ success: true });
+
+    const req = {
+      body: {
+        shopKartOrderId: orderId,
+        razorpay_order_id: razorpayOrderId,
+        razorpay_payment_id: razorpayPaymentId,
+        razorpay_signature: validSignature,
+      },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await verifyPayment(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(mockOrder.paymentStatus, 'PAID', 'Order paymentStatus must become PAID');
+      assert.strictEqual(mockOrder.status, 'PLACED', 'Order status must become PLACED');
+      assert.strictEqual(mockOrder.razorpayPaymentId, razorpayPaymentId);
+      assert.strictEqual(mockCustomer.cart.length, 0, 'User cart must be cleared to empty array []');
+    } finally {
+      Order.findOne = originalFindOrder;
+      Customer.findById = originalFindCustomer;
+      Product.findByIdAndUpdate = originalFindProductAndUpdate;
+    }
+  });
+
+  console.log('\n--- 24. Testing My Orders & Single Order API (Lab 06 Task 7 & Task 8) ---');
+  await runTest('GET /orders returns authenticated user orders sorted newest first', async () => {
+    const originalFind = Order.find;
+    const mockOrders = [
+      { _id: 'order-2', totalAmount: 7497, status: 'PLACED', createdAt: new Date('2026-10-15') },
+      { _id: 'order-1', totalAmount: 2999, status: 'DELIVERED', createdAt: new Date('2026-10-10') },
+    ];
+
+    Order.find = () => ({
+      sort: (sortObj) => {
+        assert.deepStrictEqual(sortObj, { createdAt: -1 });
+        return mockOrders;
+      },
+    });
+
+    const req = { user: { _id: '507f1f77bcf86cd799439011' } };
+    const res = createMockRes();
+
+    try {
+      await getUserOrders(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.orders.length, 2);
+    } finally {
+      Order.find = originalFind;
+    }
+  });
+
+  await runTest('GET /orders/:id returns order if user owns it', async () => {
+    const orderId = new mongoose.Types.ObjectId().toString();
+    const originalFindById = Order.findById;
+
+    Order.findById = async () => ({
+      _id: orderId,
+      user: { toString: () => '507f1f77bcf86cd799439011' },
+      totalAmount: 7497,
+    });
+
+    const req = {
+      params: { id: orderId },
+      user: { _id: { toString: () => '507f1f77bcf86cd799439011' } },
+    };
+    const res = createMockRes();
+
+    try {
+      await getOrderById(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.order._id, orderId);
+    } finally {
+      Order.findById = originalFindById;
+    }
+  });
+
+  await runTest('GET /orders/:id rejects access to someone else order with 403 Forbidden', async () => {
+    const orderId = new mongoose.Types.ObjectId().toString();
+    const originalFindById = Order.findById;
+
+    Order.findById = async () => ({
+      _id: orderId,
+      user: { toString: () => 'other-user-999' },
+    });
+
+    const req = {
+      params: { id: orderId },
+      user: { _id: { toString: () => 'my-user-111' } },
+    };
+    const res = createMockRes();
+
+    try {
+      await getOrderById(req, res);
+      assert.strictEqual(res.statusCode, 403);
+      assert.strictEqual(res.body.success, false);
+      assert.ok(res.body.message.includes('Forbidden'));
+    } finally {
+      Order.findById = originalFindById;
+    }
+  });
+
+  console.log('\n--- 25. Testing Bonus Order Status Progression (Lab 06 Bonus +10 Marks) ---');
+  await runTest('PATCH /orders/:id/status updates status to CONFIRMED, SHIPPED, DELIVERED', async () => {
+    const orderId = new mongoose.Types.ObjectId().toString();
+    const originalFindById = Order.findById;
+
+    const mockOrder = {
+      _id: orderId,
+      user: { toString: () => 'my-user-111' },
+      status: 'PLACED',
+      save: async function () { return this; },
+    };
+    Order.findById = async () => mockOrder;
+
+    const req = {
+      params: { id: orderId },
+      body: { status: 'CONFIRMED' },
+      user: { _id: { toString: () => 'my-user-111' } },
+    };
+    const res = createMockRes();
+
+    try {
+      await updateOrderStatus(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(mockOrder.status, 'CONFIRMED');
+    } finally {
+      Order.findById = originalFindById;
     }
   });
 

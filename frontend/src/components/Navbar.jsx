@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { ShoppingBag, LogOut, LogIn, UserPlus, Grid, Heart, ShoppingCart } from 'lucide-react';
+import { ShoppingBag, LogOut, LogIn, UserPlus, Grid, Heart, ShoppingCart, Package } from 'lucide-react';
 import { logoutCustomer } from '../services/api';
 import { useCart } from '../context/CartContext';
 
@@ -95,6 +95,20 @@ const Navbar = ({ currentUser, onLogout, wishlistCount = 0 }) => {
               )}
             </div>
           </NavLink>
+
+          {/* Lab 06: My Orders Link */}
+          {currentUser && (
+            <NavLink
+              to="/orders"
+              className={({ isActive }) => `nav-link nav-orders-link ${isActive ? 'active' : ''}`}
+              id="nav-orders-link"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Package size={16} className="nav-orders-icon" />
+                <span>Orders</span>
+              </div>
+            </NavLink>
+          )}
 
           {currentUser ? (
             <>

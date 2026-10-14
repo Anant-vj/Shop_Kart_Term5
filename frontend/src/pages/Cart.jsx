@@ -7,11 +7,8 @@ import CartItem from '../components/CartItem';
 const Cart = ({ currentUser }) => {
   const navigate = useNavigate();
   const { cartItems, cartLoading, cartError, refreshCart, subtotal, totalQuantity, uniqueItemsCount } = useCart();
-  const [checkoutNotice, setCheckoutNotice] = useState(false);
-
   const handleCheckout = () => {
-    setCheckoutNotice(true);
-    setTimeout(() => setCheckoutNotice(false), 3500);
+    navigate('/checkout');
   };
 
   const deliveryThreshold = 999;
@@ -165,16 +162,6 @@ const Cart = ({ currentUser }) => {
         {/* Right Column: Order Summary (Section 13) */}
         <aside className="order-summary-card" aria-label="Order Summary">
           <h2 className="order-summary-title">Order Summary</h2>
-
-          {checkoutNotice && (
-            <div className="checkout-preview-alert" role="status">
-              <CheckCircle2 size={18} />
-              <div>
-                <strong>Checkout Preview Ready!</strong>
-                <p>Full payment & shipping address flow arrives in Lab 06.</p>
-              </div>
-            </div>
-          )}
 
           <div className="summary-breakdown">
             <div className="summary-row">
