@@ -11,6 +11,7 @@ process.env.JWT_EXPIRES_IN = '1d';
 process.env.NODE_ENV = 'test';
 
 const Customer = require('../models/customer.model');
+const Product = require('../models/product.model');
 const generateToken = require('../utils/generateToken');
 const { protectRoute } = require('../middlewares/auth.middleware');
 const {
@@ -20,6 +21,11 @@ const {
   logoutCustomer,
   changePassword,
 } = require('../controllers/customer.controller');
+const {
+  createProduct,
+  getAllProducts,
+  getProductById,
+} = require('../controllers/product.controller');
 
 let testsPassed = 0;
 let testsFailed = 0;
@@ -394,6 +400,208 @@ async function main() {
       assert.strictEqual(saved, true);
     } finally {
       Customer.findById = originalFindById;
+    }
+  });
+
+  console.log('\n--- 7. Testing Product Creation (Task 2) ---');
+  await runTest('Rejects create product with missing fields with 400', async () => {
+    const req = { body: { name: 'Keyboard', price: 2999 } }; // missing description, category, image, stock
+    const res = createMockRes();
+
+    await createProduct(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.message.includes('Missing required field'));
+  });
+
+  await runTest('Rejects create product with invalid price (<= 0) with 400', async () => {
+    const req = {
+      body: {
+        name: 'Keyboard',
+        description: 'Test keyboard',
+        price: -500,
+        category: 'Electronics',
+        image: 'http://example.com/img.jpg',
+        stock: 5,
+      },
+    };
+    const res = createMockRes();
+
+    await createProduct(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.message.includes('Invalid price'));
+  });
+
+  await runTest('Rejects create product with negative stock with 400', async () => {
+    const req = {
+      body: {
+        name: 'Keyboard',
+        description: 'Test keyboard',
+        price: 2999,
+        category: 'Electronics',
+        image: 'http://example.com/img.jpg',
+        stock: -1,
+      },
+    };
+    const res = createMockRes();
+
+    await createProduct(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.message.includes('Invalid stock'));
+  });
+
+  await runTest('Creates product successfully (201)', async () => {
+    const originalSave = Product.prototype.save;
+    Product.prototype.save = async function () {
+      this._id = 'mock-product-id-123';
+      return this;
+    };
+
+    const req = {
+      body: {
+        name: 'Mechanical Keyboard',
+        description: 'RGB mechanical keyboard with blue switches.',
+        price: 2999,
+        category: 'Electronics',
+        image: 'https://example.com/keyboard.jpg',
+        stock: 10,
+      },
+    };
+    const res = createMockRes();
+
+    try {
+      await createProduct(req, res);
+      assert.strictEqual(res.statusCode, 201);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.message, 'Product created successfully');
+      assert.ok(res.body.product);
+      assert.strictEqual(res.body.product.name, 'Mechanical Keyboard');
+      assert.strictEqual(res.body.product.price, 2999);
+    } finally {
+      Product.prototype.save = originalSave;
+    }
+  });
+
+  console.log('\n--- 8. Testing Get Products, Search, Filter & Sort (Tasks 3, 5 & Bonus) ---');
+  await runTest('GET /products returns list and count (200)', async () => {
+    const mockList = [
+      { _id: '1', name: 'Keyboard', price: 2999, category: 'Electronics' },
+      { _id: '2', name: 'Headphones', price: 4999, category: 'Electronics' },
+    ];
+    const originalFind = Product.find;
+    Product.find = () => ({
+      sort: () => ({
+        select: async () => mockList,
+      }),
+    });
+
+    const req = { query: {} };
+    const res = createMockRes();
+
+    try {
+      await getAllProducts(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.count, 2);
+      assert.strictEqual(res.body.products.length, 2);
+    } finally {
+      Product.find = originalFind;
+    }
+  });
+
+  await runTest('GET /products with search and category builds query filter correctly', async () => {
+    let capturedQuery = null;
+    let capturedSort = null;
+    const originalFind = Product.find;
+
+    Product.find = (query) => {
+      capturedQuery = query;
+      return {
+        sort: (sortCriteria) => {
+          capturedSort = sortCriteria;
+          return {
+            select: async () => [
+              { _id: '1', name: 'Mechanical Keyboard', price: 2999, category: 'Electronics' },
+            ],
+          };
+        },
+      };
+    };
+
+    const req = {
+      query: {
+        search: 'keyboard',
+        category: 'Electronics',
+        sort: 'price_asc',
+      },
+    };
+    const res = createMockRes();
+
+    try {
+      await getAllProducts(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.ok(capturedQuery.name.$regex);
+      assert.strictEqual(capturedQuery.name.$options, 'i');
+      assert.ok(capturedQuery.category.$regex);
+      assert.strictEqual(capturedSort.price, 1, 'Sort should be ascending price');
+    } finally {
+      Product.find = originalFind;
+    }
+  });
+
+  console.log('\n--- 9. Testing Get Single Product (Task 4) ---');
+  await runTest('GET /products/:id rejects invalid ObjectId format with 400', async () => {
+    const req = { params: { id: 'invalid-id' } };
+    const res = createMockRes();
+
+    await getProductById(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.message.includes('Invalid product ID'));
+  });
+
+  await runTest('GET /products/:id returns 404 when product is not found', async () => {
+    const originalFindById = Product.findById;
+    Product.findById = async () => null;
+
+    const validId = '507f1f77bcf86cd799439011';
+    const req = { params: { id: validId } };
+    const res = createMockRes();
+
+    try {
+      await getProductById(req, res);
+      assert.strictEqual(res.statusCode, 404);
+      assert.strictEqual(res.body.success, false);
+      assert.strictEqual(res.body.message, 'Product not found');
+    } finally {
+      Product.findById = originalFindById;
+    }
+  });
+
+  await runTest('GET /products/:id returns product details (200)', async () => {
+    const validId = '507f1f77bcf86cd799439011';
+    const originalFindById = Product.findById;
+    Product.findById = async () => ({
+      _id: validId,
+      name: 'Wireless Mouse',
+      price: 1499,
+      category: 'Electronics',
+      stock: 20,
+    });
+
+    const req = { params: { id: validId } };
+    const res = createMockRes();
+
+    try {
+      await getProductById(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.product._id, validId);
+      assert.strictEqual(res.body.product.name, 'Wireless Mouse');
+    } finally {
+      Product.findById = originalFindById;
     }
   });
 

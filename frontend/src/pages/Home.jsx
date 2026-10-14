@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { User, ShieldCheck } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { User, ShieldCheck, ArrowRight, ShoppingBag } from 'lucide-react';
 import { getProfile } from '../services/api';
 
 const Home = ({ onUserLoaded }) => {
@@ -69,13 +69,20 @@ const Home = ({ onUserLoaded }) => {
 
   return (
     <div className="home-container">
-      {/* Welcome Hero Banner */}
+      {/* Welcome Hero Banner with Browse Catalog CTA */}
       <section className="welcome-hero">
         <div>
           <h1>Welcome back, {customer.fullName}!</h1>
           <p>
-            You are securely authenticated. Explore the ShopKart portal, view your verified profile, and access exclusive member deals.
+            You are securely authenticated. Explore the ShopKart product catalogue, find curated deals, and start discovering top products.
           </p>
+          <div style={{ marginTop: '1.25rem' }}>
+            <Link to="/products" className="btn-hero-catalog">
+              <ShoppingBag size={18} />
+              <span>Explore Products</span>
+              <ArrowRight size={18} />
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -121,33 +128,33 @@ const Home = ({ onUserLoaded }) => {
         </div>
       </section>
 
-      {/* Storefront / Member Perks Section */}
+      {/* Storefront / Member Perks Section with Category Deep-Links */}
       <section className="storefront-section">
         <h3>Explore ShopKart Categories</h3>
         <div className="category-grid">
-          <div className="category-card">
+          <Link to="/products?category=Electronics" className="category-card">
             <div className="category-icon">💻</div>
             <div className="category-name">Electronics</div>
             <div className="category-desc">Laptops, audio & mobile accessories with 1-year warranty</div>
-          </div>
+          </Link>
 
-          <div className="category-card">
+          <Link to="/products?category=Fashion" className="category-card">
             <div className="category-icon">👕</div>
             <div className="category-name">Fashion & Apparel</div>
             <div className="category-desc">Trendy apparel, footwear and accessories curated for you</div>
-          </div>
+          </Link>
 
-          <div className="category-card">
+          <Link to="/products?category=Books" className="category-card">
+            <div className="category-icon">📚</div>
+            <div className="category-name">Books & Media</div>
+            <div className="category-desc">Software engineering, computer science & best-selling non-fiction</div>
+          </Link>
+
+          <Link to="/products?category=Home" className="category-card">
             <div className="category-icon">🏡</div>
             <div className="category-name">Home & Living</div>
             <div className="category-desc">Modern furniture, smart decor, and kitchen essentials</div>
-          </div>
-
-          <div className="category-card">
-            <div className="category-icon">⚡</div>
-            <div className="category-name">Special Offers</div>
-            <div className="category-desc">Flash sales and member discounts up to 40% off</div>
-          </div>
+          </Link>
         </div>
       </section>
     </div>

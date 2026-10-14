@@ -1,0 +1,220 @@
+{
+  "info": {
+    "_postman_id": "shopkart-api-lab-01-03",
+    "name": "ShopKart - Authentication & Product Discovery API",
+    "description": "Comprehensive Postman Collection for ShopKart Engineering Labs 01 & 03 (Auth + Products + Search + Filters + Sorting)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Customer Authentication",
+      "item": [
+        {
+          "name": "1.1 Register Customer (Success)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"John Doe\",\n  \"email\": \"john@gmail.com\",\n  \"password\": \"john123\",\n  \"phone\": \"9876543210\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/customers/register", "host": ["{{baseUrl}}"], "path": ["customers", "register"] }
+          }
+        },
+        {
+          "name": "1.2 Login Customer (Success)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@gmail.com\",\n  \"password\": \"john123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/customers/login", "host": ["{{baseUrl}}"], "path": ["customers", "login"] }
+          }
+        },
+        {
+          "name": "1.3 Get Profile (Protected)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/customers/me", "host": ["{{baseUrl}}"], "path": ["customers", "me"] }
+          }
+        },
+        {
+          "name": "1.4 Logout Customer",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/customers/logout", "host": ["{{baseUrl}}"], "path": ["customers", "logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Products Catalog & Discovery",
+      "item": [
+        {
+          "name": "2.1 Create Product (Task 2)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mechanical Keyboard\",\n  \"description\": \"RGB mechanical keyboard with blue switches.\",\n  \"price\": 2999,\n  \"category\": \"Electronics\",\n  \"image\": \"https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800\",\n  \"stock\": 10\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] }
+          }
+        },
+        {
+          "name": "2.2 Create Product (Failure - Missing Field)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Incomplete Product\",\n  \"price\": 1999\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] }
+          }
+        },
+        {
+          "name": "2.3 Create Product (Failure - Invalid Price)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Free Product\",\n  \"description\": \"Test\",\n  \"price\": 0,\n  \"category\": \"Electronics\",\n  \"image\": \"https://example.com/img.jpg\",\n  \"stock\": 5\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] }
+          }
+        },
+        {
+          "name": "2.4 Get All Products (Task 3)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] }
+          }
+        },
+        {
+          "name": "2.5 Search Products by Name (Task 5)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products?search=keyboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"],
+              "query": [{ "key": "search", "value": "keyboard" }]
+            }
+          }
+        },
+        {
+          "name": "2.6 Filter Products by Category (Task 5)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products?category=Electronics",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"],
+              "query": [{ "key": "category", "value": "Electronics" }]
+            }
+          }
+        },
+        {
+          "name": "2.7 Search and Category Combined (Task 5)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products?search=keyboard&category=Electronics",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"],
+              "query": [
+                { "key": "search", "value": "keyboard" },
+                { "key": "category", "value": "Electronics" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.8 Sort Products by Price Ascending (Bonus)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products?sort=price_asc",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"],
+              "query": [{ "key": "sort", "value": "price_asc" }]
+            }
+          }
+        },
+        {
+          "name": "2.9 Sort Products by Price Descending (Bonus)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products?sort=price_desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"],
+              "query": [{ "key": "sort", "value": "price_desc" }]
+            }
+          }
+        },
+        {
+          "name": "2.10 Get Single Product by ID (Task 4)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "{{productId}}"]
+            }
+          }
+        },
+        {
+          "name": "2.11 Get Single Product (Failure - Invalid ID Format)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/invalid-id-123",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "invalid-id-123"]
+            }
+          }
+        },
+        {
+          "name": "2.12 Get Single Product (Failure - Product Not Found)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/507f1f77bcf86cd799439011",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "507f1f77bcf86cd799439011"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "66d123abc456789012345678",
+      "type": "string"
+    }
+  ]
+}

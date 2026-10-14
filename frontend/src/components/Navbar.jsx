@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { ShoppingBag, LogOut, LogIn, UserPlus } from 'lucide-react';
+import { ShoppingBag, LogOut, LogIn, UserPlus, Grid } from 'lucide-react';
 import { logoutCustomer } from '../services/api';
 
 const Navbar = ({ currentUser, onLogout }) => {
@@ -31,9 +31,23 @@ const Navbar = ({ currentUser, onLogout }) => {
 
         {/* Navigation Actions */}
         <nav className="nav-actions">
+          {/* Products Catalog Link always accessible */}
+          <NavLink
+            to="/products"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Grid size={16} />
+              <span>Products</span>
+            </div>
+          </NavLink>
+
           {currentUser ? (
             <>
-              <NavLink to="/home" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <NavLink
+                to="/home"
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              >
                 Home
               </NavLink>
 
@@ -57,14 +71,20 @@ const Navbar = ({ currentUser, onLogout }) => {
             </>
           ) : (
             <>
-              <NavLink to="/login" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <NavLink
+                to="/login"
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <LogIn size={16} />
                   <span>Login</span>
                 </div>
               </NavLink>
 
-              <NavLink to="/register" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <NavLink
+                to="/register"
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <UserPlus size={16} />
                   <span>Register</span>

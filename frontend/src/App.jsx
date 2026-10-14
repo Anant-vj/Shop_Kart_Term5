@@ -4,6 +4,8 @@ import Navbar from './components/Navbar';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import Products from './pages/Products';
+import ProductDetails from './pages/ProductDetails';
 import { getProfile } from './services/api';
 
 function App() {
@@ -43,7 +45,12 @@ function App() {
               path="/home"
               element={<Home onUserLoaded={(user) => setCurrentUser(user)} />}
             />
-            {/* Default Route redirects to /home */}
+
+            {/* Task 6 & Task 8: Product Catalog & Details Routes */}
+            <Route path="/products" element={<Products />} />
+            <Route path="/products/:id" element={<ProductDetails />} />
+
+            {/* Default Route redirects to /products or /home */}
             <Route path="/" element={<Navigate to="/home" replace />} />
             {/* Catch-all unknown routes */}
             <Route path="*" element={<Navigate to="/home" replace />} />
