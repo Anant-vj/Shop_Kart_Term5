@@ -203,6 +203,135 @@
           }
         }
       ]
+    },
+    {
+      "name": "3. Wishlist Management (Lab 04)",
+      "item": [
+        {
+          "name": "3.1 Add Product to Wishlist (Success - Task 2)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wishlist/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["wishlist", "{{productId}}"]
+            }
+          }
+        },
+        {
+          "name": "3.2 Add Product to Wishlist (Duplicate - 409 Conflict)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wishlist/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["wishlist", "{{productId}}"]
+            }
+          }
+        },
+        {
+          "name": "3.3 Add Product to Wishlist (Invalid ID - 400 Bad Request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wishlist/invalid-product-id",
+              "host": ["{{baseUrl}}"],
+              "path": ["wishlist", "invalid-product-id"]
+            }
+          }
+        },
+        {
+          "name": "3.4 Add Product to Wishlist (Product Not Found - 404 Not Found)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wishlist/507f1f77bcf86cd799439011",
+              "host": ["{{baseUrl}}"],
+              "path": ["wishlist", "507f1f77bcf86cd799439011"]
+            }
+          }
+        },
+        {
+          "name": "3.5 Add Product to Wishlist (Unauthenticated - 401 Unauthorized)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/wishlist/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["wishlist", "{{productId}}"]
+            }
+          }
+        },
+        {
+          "name": "3.6 Get Current User's Wishlist with populate() (Task 3)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wishlist",
+              "host": ["{{baseUrl}}"],
+              "path": ["wishlist"]
+            }
+          }
+        },
+        {
+          "name": "3.7 Remove Product from Wishlist (Task 4 - Success)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wishlist/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["wishlist", "{{productId}}"]
+            }
+          }
+        },
+        {
+          "name": "3.8 Remove Product from Wishlist (Product Not in Wishlist - 404 Not Found)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wishlist/507f1f77bcf86cd799439011",
+              "host": ["{{baseUrl}}"],
+              "path": ["wishlist", "507f1f77bcf86cd799439011"]
+            }
+          }
+        },
+        {
+          "name": "3.9 Wishlist Toggle (Bonus Challenge)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wishlist/{{productId}}/toggle",
+              "host": ["{{baseUrl}}"],
+              "path": ["wishlist", "{{productId}}", "toggle"]
+            }
+          }
+        }
+      ]
     }
   ],
   "variable": [

@@ -12,6 +12,16 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/products': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/wishlist': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 });

@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const customerRoutes = require('./routes/customer.routes');
 const productRoutes = require('./routes/product.routes');
+const wishlistRoutes = require('./routes/wishlist.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -46,6 +47,7 @@ app.get('/', (req, res) => {
 // Mount Routes
 app.use('/customers', customerRoutes);
 app.use('/products', productRoutes);
+app.use('/wishlist', wishlistRoutes);
 
 // 404 Handler for undefined routes
 app.use((req, res, next) => {

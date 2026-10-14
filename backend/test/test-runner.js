@@ -10,6 +10,7 @@ process.env.JWT_SECRET = 'test_secret_key_12345';
 process.env.JWT_EXPIRES_IN = '1d';
 process.env.NODE_ENV = 'test';
 
+const mongoose = require('mongoose');
 const Customer = require('../models/customer.model');
 const Product = require('../models/product.model');
 const generateToken = require('../utils/generateToken');
@@ -26,6 +27,12 @@ const {
   getAllProducts,
   getProductById,
 } = require('../controllers/product.controller');
+const {
+  addToWishlist,
+  getWishlist,
+  removeFromWishlist,
+  toggleWishlist,
+} = require('../controllers/wishlist.controller');
 
 let testsPassed = 0;
 let testsFailed = 0;
@@ -602,6 +609,298 @@ async function main() {
       assert.strictEqual(res.body.product.name, 'Wireless Mouse');
     } finally {
       Product.findById = originalFindById;
+    }
+  });
+
+  console.log('\n--- 10. Testing Wishlist Schema & Model (Lab 04 Task 1) ---');
+  await runTest('Customer schema contains wishlist field referencing Product with default []', async () => {
+    const wishlistPath = Customer.schema.path('wishlist');
+    assert.ok(wishlistPath, 'Customer schema must define a wishlist field');
+    assert.strictEqual(wishlistPath.instance, 'Array', 'wishlist must be an Array');
+    assert.strictEqual(wishlistPath.caster.options.ref, 'Product', 'wishlist items must ref "Product"');
+  });
+
+  console.log('\n--- 11. Testing Add Product to Wishlist (Lab 04 Task 2) ---');
+  await runTest('POST /wishlist/:productId rejects invalid ObjectId with 400', async () => {
+    const req = {
+      params: { productId: 'invalid-id' },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    await addToWishlist(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.message.includes('Invalid product ID'));
+  });
+
+  await runTest('POST /wishlist/:productId returns 404 when product not found', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindById = Product.findById;
+    Product.findById = async () => null;
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await addToWishlist(req, res);
+      assert.strictEqual(res.statusCode, 404);
+      assert.strictEqual(res.body.success, false);
+      assert.strictEqual(res.body.message, 'Product not found');
+    } finally {
+      Product.findById = originalFindById;
+    }
+  });
+
+  await runTest('POST /wishlist/:productId returns 409 Conflict if product already in wishlist', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    const originalFindCustomer = Customer.findById;
+
+    Product.findById = async () => ({ _id: validProductId, name: 'Sample Keyboard' });
+    Customer.findById = async () => ({
+      _id: '507f1f77bcf86cd799439011',
+      wishlist: [new mongoose.Types.ObjectId(validProductId)],
+    });
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await addToWishlist(req, res);
+      assert.strictEqual(res.statusCode, 409);
+      assert.strictEqual(res.body.success, false);
+      assert.strictEqual(res.body.message, 'Product already in wishlist');
+    } finally {
+      Product.findById = originalFindProduct;
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  await runTest('POST /wishlist/:productId saves ObjectId reference and returns 200', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    const originalFindCustomer = Customer.findById;
+    let saved = false;
+
+    Product.findById = async () => ({ _id: validProductId, name: 'Sample Keyboard' });
+    Customer.findById = async () => ({
+      _id: '507f1f77bcf86cd799439011',
+      wishlist: [],
+      save: async function () {
+        saved = true;
+        return this;
+      },
+    });
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await addToWishlist(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.message, 'Product added to wishlist');
+      assert.strictEqual(saved, true);
+    } finally {
+      Product.findById = originalFindProduct;
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  console.log('\n--- 12. Testing Get Current User Wishlist with populate() (Lab 04 Task 3) ---');
+  await runTest('GET /wishlist returns populated product references and count', async () => {
+    const originalFindCustomer = Customer.findById;
+    const populatedMockItems = [
+      {
+        _id: '507f1f77bcf86cd799439012',
+        name: 'Mechanical Keyboard',
+        price: 2999,
+        category: 'Electronics',
+        image: 'https://example.com/keyboard.jpg',
+        stock: 10,
+      },
+      {
+        _id: '507f1f77bcf86cd799439013',
+        name: 'Wireless Headphones',
+        price: 4999,
+        category: 'Electronics',
+        image: 'https://example.com/headphones.jpg',
+        stock: 5,
+      },
+    ];
+
+    Customer.findById = (userId) => ({
+      populate: async (options) => {
+        assert.strictEqual(options.path, 'wishlist', 'populate must target "wishlist"');
+        return {
+          _id: userId,
+          wishlist: populatedMockItems,
+        };
+      },
+    });
+
+    const req = { user: { _id: '507f1f77bcf86cd799439011' } };
+    const res = createMockRes();
+
+    try {
+      await getWishlist(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.count, 2);
+      assert.strictEqual(res.body.wishlist.length, 2);
+      assert.strictEqual(res.body.wishlist[0].name, 'Mechanical Keyboard');
+    } finally {
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  console.log('\n--- 13. Testing Remove Product from Wishlist (Lab 04 Task 4) ---');
+  await runTest('DELETE /wishlist/:productId rejects invalid ObjectId with 400', async () => {
+    const req = {
+      params: { productId: 'not-valid' },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    await removeFromWishlist(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.strictEqual(res.body.success, false);
+  });
+
+  await runTest('DELETE /wishlist/:productId returns 404 when product not in wishlist', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const otherId = new mongoose.Types.ObjectId().toString();
+    const originalFindCustomer = Customer.findById;
+
+    Customer.findById = async () => ({
+      _id: '507f1f77bcf86cd799439011',
+      wishlist: [otherId],
+    });
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await removeFromWishlist(req, res);
+      assert.strictEqual(res.statusCode, 404);
+      assert.strictEqual(res.body.success, false);
+      assert.strictEqual(res.body.message, 'Product not in wishlist');
+    } finally {
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  await runTest('DELETE /wishlist/:productId removes product reference and returns 200', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindCustomer = Customer.findById;
+    let saved = false;
+
+    Customer.findById = async () => ({
+      _id: '507f1f77bcf86cd799439011',
+      wishlist: [new mongoose.Types.ObjectId(validProductId)],
+      save: async function () {
+        saved = true;
+        return this;
+      },
+    });
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    const res = createMockRes();
+
+    try {
+      await removeFromWishlist(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.message, 'Product removed from wishlist');
+      assert.strictEqual(saved, true);
+    } finally {
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  console.log('\n--- 14. Testing Wishlist Toggle (Bonus Challenge +10 Marks) ---');
+  await runTest('PATCH /wishlist/:productId/toggle adds when absent and removes when present', async () => {
+    const validProductId = new mongoose.Types.ObjectId().toString();
+    const originalFindProduct = Product.findById;
+    const originalFindCustomer = Customer.findById;
+
+    Product.findById = async () => ({ _id: validProductId });
+
+    // 1st call: Add
+    let userMock = {
+      _id: '507f1f77bcf86cd799439011',
+      wishlist: [],
+      save: async function () { return this; },
+    };
+    Customer.findById = async () => userMock;
+
+    const req = {
+      params: { productId: validProductId },
+      user: { _id: '507f1f77bcf86cd799439011' },
+    };
+    let res = createMockRes();
+
+    try {
+      await toggleWishlist(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.saved, true);
+      assert.strictEqual(res.body.message, 'Product added to wishlist');
+
+      // 2nd call: Remove
+      res = createMockRes();
+      await toggleWishlist(req, res);
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.saved, false);
+      assert.strictEqual(res.body.message, 'Product removed from wishlist');
+    } finally {
+      Product.findById = originalFindProduct;
+      Customer.findById = originalFindCustomer;
+    }
+  });
+
+  console.log('\n--- 15. Testing Authorization Header Support in Middleware ---');
+  await runTest('protectRoute accepts Authorization: Bearer <token>', async () => {
+    const token = jwt.sign({ id: 'valid-cust-id' }, process.env.JWT_SECRET);
+    const originalFindById = Customer.findById;
+
+    Customer.findById = (id) => ({
+      select: () => ({
+        _id: id,
+        fullName: 'Bearer User',
+        email: 'bearer@example.com',
+      }),
+    });
+
+    const req = {
+      cookies: {},
+      headers: { authorization: `Bearer ${token}` },
+    };
+    const res = createMockRes();
+    let nextCalled = false;
+
+    try {
+      await protectRoute(req, res, () => { nextCalled = true; });
+      assert.strictEqual(nextCalled, true);
+      assert.ok(req.user);
+      assert.strictEqual(req.user.fullName, 'Bearer User');
+    } finally {
+      Customer.findById = originalFindById;
     }
   });
 

@@ -11,10 +11,12 @@ import {
   AlertCircle,
   RefreshCw,
   CheckCircle2,
+  Heart,
+  Loader2,
 } from 'lucide-react';
-import { fetchProductById } from '../services/api';
+import { fetchProductById, getWishlist, toggleWishlist } from '../services/api';
 
-const ProductDetails = () => {
+const ProductDetails = ({ onWishlistCountChange }) => {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -22,6 +24,9 @@ const ProductDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [addedNotice, setAddedNotice] = useState(false);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [wishlistNotice, setWishlistNotice] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -36,6 +41,19 @@ const ProductDetails = () => {
         if (isMounted) {
           if (data.success && data.product) {
             setProduct(data.product);
+
+            // Check if product is in current user's wishlist
+            try {
+              const wishData = await getWishlist();
+              if (wishData && Array.isArray(wishData.wishlist)) {
+                const found = wishData.wishlist.some(
+                  (item) => (item._id || item).toString() === id.toString()
+                );
+                setIsWishlisted(found);
+              }
+            } catch (wErr) {
+              // Silently ignore if unauthenticated
+            }
           } else {
             setError('Product details could not be loaded.');
           }
@@ -68,6 +86,37 @@ const ProductDetails = () => {
   const handleAddToCart = () => {
     setAddedNotice(true);
     setTimeout(() => setAddedNotice(false), 2500);
+  };
+
+  const handleWishlistToggle = async () => {
+    if (wishlistLoading) return;
+    setWishlistLoading(true);
+    setWishlistNotice(null);
+
+    try {
+      const data = await toggleWishlist(id);
+      setIsWishlisted(data.saved);
+      setWishlistNotice({
+        type: 'success',
+        text: data.saved ? '♥ Added to your wishlist!' : 'Removed from your wishlist.',
+      });
+      setTimeout(() => setWishlistNotice(null), 3000);
+      if (onWishlistCountChange) {
+        onWishlistCountChange(data.count);
+      }
+    } catch (err) {
+      const status = err.response?.status;
+      let msg = 'Unable to update wishlist. Please try again.';
+      if (status === 401) {
+        msg = 'Please log in to save items to your wishlist.';
+      } else if (err.response?.data?.message) {
+        msg = err.response.data.message;
+      }
+      setWishlistNotice({ type: 'error', text: msg });
+      setTimeout(() => setWishlistNotice(null), 4000);
+    } finally {
+      setWishlistLoading(false);
+    }
   };
 
   // State 1: Loading
@@ -175,15 +224,31 @@ const ProductDetails = () => {
             <p>{product.description}</p>
           </div>
 
-          {/* Temporary Notification for Add to Cart */}
+          {/* Notifications */}
           {addedNotice && (
             <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
               <CheckCircle2 size={18} />
-              <span>Added to cart preview! (Cart backend API comes in Lab 04)</span>
+              <span>Added to cart preview! (Cart backend API comes in Lab 05)</span>
             </div>
           )}
 
-          {/* Task 8: Add to Cart Button (UI Only for now) */}
+          {wishlistNotice && (
+            <div
+              className={`alert ${
+                wishlistNotice.type === 'error' ? 'alert-danger' : 'alert-success'
+              }`}
+              style={{ marginBottom: '1rem' }}
+            >
+              {wishlistNotice.type === 'error' ? (
+                <AlertCircle size={18} />
+              ) : (
+                <CheckCircle2 size={18} />
+              )}
+              <span>{wishlistNotice.text}</span>
+            </div>
+          )}
+
+          {/* Actions: Add to Cart and Wishlist Toggle */}
           <div className="details-actions">
             <button
               type="button"
@@ -193,6 +258,33 @@ const ProductDetails = () => {
             >
               <ShoppingCart size={20} />
               <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`btn-details-wishlist ${isWishlisted ? 'saved' : ''} ${
+                wishlistLoading ? 'loading' : ''
+              }`}
+              onClick={handleWishlistToggle}
+              disabled={wishlistLoading}
+              id={`details-wishlist-btn-${product._id}`}
+            >
+              {wishlistLoading ? (
+                <>
+                  <Loader2 size={18} className="spinner-icon" />
+                  <span>⏳ Saving...</span>
+                </>
+              ) : isWishlisted ? (
+                <>
+                  <Heart size={18} fill="#f43f5e" color="#f43f5e" />
+                  <span>♥ Saved to Wishlist</span>
+                </>
+              ) : (
+                <>
+                  <Heart size={18} />
+                  <span>♡ Add to Wishlist</span>
+                </>
+              )}
             </button>
           </div>
 

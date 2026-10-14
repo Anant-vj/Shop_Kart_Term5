@@ -3,9 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { PackageSearch, AlertCircle, RefreshCw, ShoppingBag } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import SearchBar from '../components/SearchBar';
-import { fetchProducts } from '../services/api';
+import { fetchProducts, getWishlist } from '../services/api';
 
-const Products = () => {
+const Products = ({ onWishlistCountChange }) => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Sync initial state from URL query parameters (e.g. /products?category=Electronics)
@@ -14,11 +14,43 @@ const Products = () => {
   const initialSort = searchParams.get('sort') || '';
 
   const [products, setProducts] = useState([]);
+  const [wishlistIds, setWishlistIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [sortBy, setSortBy] = useState(initialSort);
+
+  // Sync initial saved wishlist IDs for authenticated customers
+  useEffect(() => {
+    const loadUserWishlist = async () => {
+      try {
+        const data = await getWishlist();
+        if (data && Array.isArray(data.wishlist)) {
+          const idSet = new Set(data.wishlist.map((item) => (item._id || item).toString()));
+          setWishlistIds(idSet);
+        }
+      } catch (err) {
+        // Silently ignore if unauthenticated (products catalog remains viewable by guests)
+      }
+    };
+    loadUserWishlist();
+  }, []);
+
+  const handleWishlistToggle = (productId, isSaved, count) => {
+    setWishlistIds((prev) => {
+      const next = new Set(prev);
+      if (isSaved) {
+        next.add(productId.toString());
+      } else {
+        next.delete(productId.toString());
+      }
+      return next;
+    });
+    if (onWishlistCountChange) {
+      onWishlistCountChange(count);
+    }
+  };
 
   // Update URL search parameters when filters change
   const updateURLParams = useCallback((search, category, sort) => {
@@ -153,7 +185,12 @@ const Products = () => {
       {!loading && !error && products.length > 0 && (
         <section className="product-grid" aria-label="Product catalogue">
           {products.map((product) => (
-            <ProductCard key={product._id} product={product} />
+            <ProductCard
+              key={product._id}
+              product={product}
+              isWishlisted={wishlistIds.has(product._id.toString())}
+              onWishlistToggle={handleWishlistToggle}
+            />
           ))}
         </section>
       )}

@@ -100,4 +100,47 @@ export const createProduct = async (productData) => {
   return response.data;
 };
 
+/* ==========================================================================
+   Wishlist API Calls (Lab 04)
+   ========================================================================== */
+
+/**
+ * Task 2: Add product to current customer's wishlist
+ * @param {string} productId - Product ObjectId
+ * @returns {Promise<Object>} { success, message, count }
+ */
+export const addToWishlist = async (productId) => {
+  const response = await api.post(`/wishlist/${productId}`);
+  return response.data;
+};
+
+/**
+ * Task 3: Fetch current customer's wishlist with populated product references
+ * @returns {Promise<Object>} { success, count, wishlist }
+ */
+export const getWishlist = async () => {
+  const response = await api.get('/wishlist');
+  return response.data;
+};
+
+/**
+ * Task 4: Remove product from current customer's wishlist
+ * @param {string} productId - Product ObjectId
+ * @returns {Promise<Object>} { success, message, count }
+ */
+export const removeFromWishlist = async (productId) => {
+  const response = await api.delete(`/wishlist/${productId}`);
+  return response.data;
+};
+
+/**
+ * Bonus: Toggle product in wishlist (adds if absent, removes if present)
+ * @param {string} productId - Product ObjectId
+ * @returns {Promise<Object>} { success, saved, message, count }
+ */
+export const toggleWishlist = async (productId) => {
+  const response = await api.patch(`/wishlist/${productId}/toggle`);
+  return response.data;
+};
+
 export default api;
