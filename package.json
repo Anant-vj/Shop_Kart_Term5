@@ -1,17 +1,22 @@
 {
-  "name": "mern-class-projects",
+  "name": "shopkart-mern-project",
   "version": "1.0.0",
-  "description": "ShopKart Customer Authentication Service - Engineering Lab 01",
+  "description": "ShopKart Full Stack E-Commerce Platform (Labs 01 & 02)",
   "scripts": {
-    "start": "npm --prefix backend start",
-    "dev": "npm --prefix backend run dev",
-    "test": "npm --prefix backend test",
-    "postinstall": "npm --prefix backend install"
+    "start:backend": "npm --prefix backend start",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "test:backend": "npm --prefix backend test",
+    "test": "npm --prefix backend test"
   },
   "keywords": [
     "mern",
     "shopkart",
-    "authentication"
+    "authentication",
+    "jwt",
+    "react",
+    "express"
   ],
   "author": "",
   "license": "ISC"
