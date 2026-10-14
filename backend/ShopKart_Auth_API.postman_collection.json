@@ -1,0 +1,233 @@
+{
+  "info": {
+    "_postman_id": "shopkart-auth-service-lab-01",
+    "name": "ShopKart - Customer Authentication Service",
+    "description": "Postman Collection for Engineering Lab 01 - ShopKart Customer Authentication Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Register Customer (Success)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"John Doe\",\n  \"email\": \"john@gmail.com\",\n  \"password\": \"john123\",\n  \"phone\": \"9876543210\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "register"
+          ]
+        },
+        "description": "Registers a new customer account. Validates required fields, password length >= 6, and email uniqueness."
+      }
+    },
+    {
+      "name": "2. Register Customer (Failure - Missing Field)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"John Doe\",\n  \"email\": \"john@gmail.com\",\n  \"password\": \"john123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "register"
+          ]
+        },
+        "description": "Fails with 400 Bad Request because phone number is missing."
+      }
+    },
+    {
+      "name": "3. Register Customer (Failure - Duplicate Email)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"John Duplicate\",\n  \"email\": \"john@gmail.com\",\n  \"password\": \"anotherpass\",\n  \"phone\": \"9988776655\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "register"
+          ]
+        },
+        "description": "Fails with 409 Conflict because john@gmail.com already exists."
+      }
+    },
+    {
+      "name": "4. Login Customer (Success)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@gmail.com\",\n  \"password\": \"john123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "login"
+          ]
+        },
+        "description": "Logs in customer, returns success response and sets an HttpOnly cookie containing the signed JWT."
+      }
+    },
+    {
+      "name": "5. Login Customer (Failure - Invalid Credentials)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@gmail.com\",\n  \"password\": \"wrongPassword123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "login"
+          ]
+        },
+        "description": "Fails with 401 Unauthorized without leaking whether email or password was wrong."
+      }
+    },
+    {
+      "name": "6. Get Profile (Protected)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "me"
+          ]
+        },
+        "description": "Fetches authenticated customer profile from req.user (excluding password) using the HttpOnly cookie."
+      }
+    },
+    {
+      "name": "7. Change Password (Bonus Challenge)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"oldPassword\": \"john123\",\n  \"newPassword\": \"newSecurePass789\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers/change-password",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "change-password"
+          ]
+        },
+        "description": "Bonus endpoint (+10 marks): Verifies old password and hashes new password before saving."
+      }
+    },
+    {
+      "name": "8. Logout Customer",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/logout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "logout"
+          ]
+        },
+        "description": "Clears the authentication HttpOnly cookie."
+      }
+    },
+    {
+      "name": "9. Verify Profile Blocked After Logout",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "me"
+          ]
+        },
+        "description": "Expects 401 Unauthorized after the authentication cookie is cleared."
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ]
+}
