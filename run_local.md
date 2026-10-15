@@ -179,17 +179,22 @@ Once the servers are running, follow this flow to test all features:
 - **Cause:** You ran `npm run dev` in the root folder before the root script was added.
 - **Solution:** Root `package.json` now includes `"dev"`, which runs `concurrently` across backend and frontend. You can now simply run `npm run dev` from the root folder!
 
-### 2. MongoDB Connection Error (`ECONNREFUSED 127.0.0.1:27017`)
-- **Cause:** Local MongoDB service is not started.
-- **Solution (Windows):** Open PowerShell as Administrator and run:
+### 2. MongoDB Buffering Timeout / Connection Error (`buffering timed out after 10000ms` or `ECONNREFUSED`)
+- **Cause:** MongoDB was not running when the backend server started. Mongoose buffered your database queries (like `customers.findOne()`) for 10 seconds hoping the database would connect, then timed out.
+- **Solution (Docker):** A ready-to-use MongoDB container `shopkart-mongodb` is configured. Simply run:
+  ```bash
+  docker start shopkart-mongodb
+  ```
+  *(Or if creating fresh: `docker run -d --name shopkart-mongodb -p 27017:27017 mongo:8`)*
+- **Solution (Native Windows Service):** Open PowerShell as Administrator and run:
   ```powershell
   net start MongoDB
   ```
-  Or check Services app (`services.msc`) and start **MongoDB Server**.
-- Alternatively, if using MongoDB Atlas, replace `MONGO_URI` in `backend/.env` with your Atlas connection string:
+- **Solution (MongoDB Atlas Cloud):** Replace `MONGO_URI` in `backend/.env` with your free Atlas connection string:
   ```env
   MONGO_URI=mongodb+srv://<username>:<password>@cluster0.xxxx.mongodb.net/shopkart?retryWrites=true&w=majority
   ```
+- After starting MongoDB, restart your server with `npm run dev`.
 
 ### 3. Port Conflicts (`Port 5000 or 5173 already in use`)
 - **Backend:** Change `PORT=5001` in `backend/.env`.
