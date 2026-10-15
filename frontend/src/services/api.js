@@ -212,6 +212,16 @@ export const verifyPayment = async (paymentData) => {
 };
 
 /**
+ * Dev / Test Mode: Simulate payment gateway response
+ * @param {Object} payload - { shopKartOrderId, fail }
+ * @returns {Promise<Object>} { success, razorpay_order_id, razorpay_payment_id, razorpay_signature }
+ */
+export const simulatePayment = async (payload) => {
+  const response = await api.post('/orders/simulate-payment', payload);
+  return response.data;
+};
+
+/**
  * Task 7: Fetch current customer's order history
  * @returns {Promise<Object>} { success, count, orders }
  */

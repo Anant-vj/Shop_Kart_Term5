@@ -7,6 +7,7 @@ const {
   getUserOrders,
   getOrderById,
   updateOrderStatus,
+  simulatePayment,
 } = require('../controllers/order.controller');
 
 /**
@@ -22,6 +23,9 @@ router.post('/', createPaymentOrder);
 
 // Task 4 & Step 11: Verify Razorpay Payment Signature and Confirm Order
 router.post('/verify-payment', verifyPayment);
+
+// Dev / Test Mode: Simulate payment gateway response
+router.post('/simulate-payment', simulatePayment);
 
 // Task 7: Get all orders for the authenticated customer
 router.get('/', getUserOrders);

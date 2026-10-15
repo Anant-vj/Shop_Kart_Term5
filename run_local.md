@@ -200,9 +200,12 @@ Once the servers are running, follow this flow to test all features:
 - **Backend:** Change `PORT=5001` in `backend/.env`.
 - **Frontend:** Vite will automatically prompt to use the next available port (e.g. `5174`).
 
-### 4. Razorpay Modal Behavior in Test Mode
-- No real money is deducted in Test Mode.
-- To test payment failure: In the Razorpay modal, select **Failure** or close the popup. Notice that your cart is **not** cleared and remains fully intact!
+### 4. Razorpay Test Mode & Local Gateway Simulator
+- **Without live merchant keys:** ShopKart includes an integrated **Razorpay Test Mode Simulator Modal** that runs completely locally without depending on remote third-party servers.
+- When you click **Place Order & Pay**, the simulator modal opens with UPI, Card, and NetBanking tabs.
+- Clicking **"Pay (Success)"** asks the backend to generate authentic payment credentials and an HMAC-SHA256 signature, verifies it at `POST /orders/verify-payment`, deducts product stock, clears your cart, and navigates to the Order Success page!
+- Clicking **"Simulate Failure (Keep Cart)"** simulates a bank decline and verifies that your cart remains preserved.
+- **With your own live Razorpay keys:** If you paste your own test keys (`rzp_test_xxxx`) into `backend/.env`, ShopKart automatically detects them and loads the official Razorpay remote checkout modal.
 
 ---
 

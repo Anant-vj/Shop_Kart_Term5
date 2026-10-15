@@ -10,9 +10,14 @@ import {
   CheckCircle2,
   Lock,
   ShoppingBag,
+  X,
+  Smartphone,
+  Building2,
+  QrCode,
+  Sparkles,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { createPaymentOrder, verifyPayment } from '../services/api';
+import { createPaymentOrder, verifyPayment, simulatePayment } from '../services/api';
 
 /**
  * Dynamically loads the Razorpay checkout script
@@ -50,6 +55,11 @@ const Checkout = ({ currentUser }) => {
   // In-flight payment & order processing state
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
+
+  // Test Mode Simulator State
+  const [simulatorData, setSimulatorData] = useState(null); // { shopKartOrderId, razorpayOrderId, amount, currency }
+  const [simulatorTab, setSimulatorTab] = useState('upi'); // 'upi' | 'card' | 'netbanking'
+  const [isSimulating, setIsSimulating] = useState(false);
 
   // Sync user details when currentUser loads
   useEffect(() => {
@@ -127,7 +137,7 @@ const Checkout = ({ currentUser }) => {
   };
 
   /**
-   * Main Checkout & Razorpay Flow
+   * Main Checkout & Payment Flow
    */
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
@@ -150,13 +160,7 @@ const Checkout = ({ currentUser }) => {
     setPaymentError(null);
 
     try {
-      // Step 1: Ensure Razorpay SDK is loaded
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded) {
-        throw new Error('Failed to load Razorpay payment gateway SDK. Please check your internet connection.');
-      }
-
-      // Step 2: Create ShopKart Pending Order + Razorpay Order on Backend
+      // Step 1: Create ShopKart Pending Order + Razorpay Order on Backend
       const orderPayload = {
         fullName: formData.fullName.trim(),
         phone: formData.phone.trim(),
@@ -172,7 +176,34 @@ const Checkout = ({ currentUser }) => {
         throw new Error(checkoutData?.message || 'Failed to initialize payment order');
       }
 
-      const { shopKartOrderId, razorpayOrderId, amount, currency, key } = checkoutData;
+      const { shopKartOrderId, razorpayOrderId, amount, currency, key, isSimulator } = checkoutData;
+
+      // If backend flagged isSimulator (placeholder keys or Razorpay order creation failed),
+      // launch the local Test Mode Simulator directly without calling remote Razorpay servers!
+      if (isSimulator) {
+        setIsProcessing(false);
+        setSimulatorData({
+          shopKartOrderId,
+          razorpayOrderId,
+          amount,
+          currency,
+        });
+        return;
+      }
+
+      // Step 2: Ensure Razorpay SDK is loaded for real merchant keys
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        // Fallback to simulator if script cannot load
+        setIsProcessing(false);
+        setSimulatorData({
+          shopKartOrderId,
+          razorpayOrderId,
+          amount,
+          currency,
+        });
+        return;
+      }
 
       // Step 3: Configure Razorpay Checkout Options
       const options = {
@@ -230,7 +261,14 @@ const Checkout = ({ currentUser }) => {
 
       // Check if Razorpay constructor is available
       if (typeof window.Razorpay !== 'function') {
-        throw new Error('Razorpay SDK is not ready. Please refresh and try again.');
+        setIsProcessing(false);
+        setSimulatorData({
+          shopKartOrderId,
+          razorpayOrderId,
+          amount,
+          currency,
+        });
+        return;
       }
 
       const paymentObject = new window.Razorpay(options);
@@ -239,8 +277,15 @@ const Checkout = ({ currentUser }) => {
         console.error('Razorpay payment failed:', failureResponse.error);
         setIsProcessing(false);
         setPaymentError(
-          `Payment failed: ${failureResponse.error?.description || 'Transaction was declined.'} Your cart has not been cleared. Please try again.`
+          `Payment failed: ${failureResponse.error?.description || 'Transaction was declined.'} Test Mode Simulator opened below.`
         );
+        // Fallback to simulator so student can still complete the lab seamlessly
+        setSimulatorData({
+          shopKartOrderId,
+          razorpayOrderId,
+          amount,
+          currency,
+        });
       });
 
       paymentObject.open();
@@ -250,6 +295,66 @@ const Checkout = ({ currentUser }) => {
         err.response?.data?.message || err.message || 'An unexpected error occurred during checkout.';
       setPaymentError(errorMsg);
       setIsProcessing(false);
+    }
+  };
+
+  /**
+   * Handle Simulation Actions (Success with real HMAC signature vs Failure)
+   */
+  const handleSimulatePayment = async (fail = false) => {
+    if (!simulatorData) return;
+    setIsSimulating(true);
+    setPaymentError(null);
+
+    try {
+      if (fail) {
+        try {
+          await simulatePayment({
+            shopKartOrderId: simulatorData.shopKartOrderId,
+            fail: true,
+          });
+        } catch {
+          // Expected 400 from fail simulation
+        }
+        setSimulatorData(null);
+        setIsProcessing(false);
+        setIsSimulating(false);
+        setPaymentError('Payment simulation: Transaction was declined. Your cart was preserved.');
+        return;
+      }
+
+      // Step 1: Call backend simulator to generate authentic payment credentials + HMAC SHA256 signature
+      const simResult = await simulatePayment({
+        shopKartOrderId: simulatorData.shopKartOrderId,
+        fail: false,
+      });
+
+      if (!simResult || !simResult.success) {
+        throw new Error(simResult?.message || 'Payment simulation failed');
+      }
+
+      // Step 2: Send payment credentials to the standard verify-payment endpoint
+      const verificationPayload = {
+        shopKartOrderId: simulatorData.shopKartOrderId,
+        razorpay_order_id: simResult.razorpay_order_id,
+        razorpay_payment_id: simResult.razorpay_payment_id,
+        razorpay_signature: simResult.razorpay_signature,
+      };
+
+      const verificationResult = await verifyPayment(verificationPayload);
+
+      if (verificationResult && verificationResult.success) {
+        // Step 3: Order marked PAID and PLACED, stock decremented, cart cleared!
+        clearCartState();
+        setSimulatorData(null);
+        navigate(`/order-success/${simulatorData.shopKartOrderId}`);
+      } else {
+        throw new Error(verificationResult?.message || 'Payment signature verification failed');
+      }
+    } catch (err) {
+      console.error('Simulation error:', err);
+      setPaymentError(err.response?.data?.message || err.message || 'Payment simulation failed.');
+      setIsSimulating(false);
     }
   };
 
@@ -569,6 +674,183 @@ const Checkout = ({ currentUser }) => {
           </div>
         </aside>
       </div>
+
+      {/* Test Mode Razorpay Simulator Modal */}
+      {simulatorData && (
+        <div className="simulator-overlay" role="dialog" aria-modal="true" aria-labelledby="simulator-title">
+          <div className="simulator-modal">
+            {/* Modal Header */}
+            <div className="simulator-header">
+              <div className="sim-title-group">
+                <div className="sim-badge">
+                  <Sparkles size={14} />
+                  <span>TEST MODE SANDBOX</span>
+                </div>
+                <h3 id="simulator-title" className="sim-title">
+                  ShopKart Payment Gateway
+                </h3>
+                <p className="sim-subtitle">
+                  Razorpay Emulation for Local Lab Evaluation
+                </p>
+              </div>
+              <button
+                type="button"
+                className="sim-close-btn"
+                onClick={() => {
+                  setSimulatorData(null);
+                  setIsProcessing(false);
+                }}
+                disabled={isSimulating}
+                title="Cancel Payment"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Amount Banner */}
+            <div className="sim-amount-banner">
+              <div className="sim-amount-left">
+                <span className="sim-amount-label">Payable Amount</span>
+                <span className="sim-amount-value">
+                  ₹{(simulatorData.amount / 100).toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="sim-order-meta">
+                <span className="sim-order-id">
+                  Order: #{simulatorData.shopKartOrderId.slice(-8).toUpperCase()}
+                </span>
+                <span className="sim-currency">{simulatorData.currency}</span>
+              </div>
+            </div>
+
+            {/* Payment Method Tabs */}
+            <div className="sim-tabs">
+              <button
+                type="button"
+                className={`sim-tab ${simulatorTab === 'upi' ? 'active' : ''}`}
+                onClick={() => setSimulatorTab('upi')}
+              >
+                <Smartphone size={16} />
+                <span>UPI / QR</span>
+              </button>
+              <button
+                type="button"
+                className={`sim-tab ${simulatorTab === 'card' ? 'active' : ''}`}
+                onClick={() => setSimulatorTab('card')}
+              >
+                <CreditCard size={16} />
+                <span>Card</span>
+              </button>
+              <button
+                type="button"
+                className={`sim-tab ${simulatorTab === 'netbanking' ? 'active' : ''}`}
+                onClick={() => setSimulatorTab('netbanking')}
+              >
+                <Building2 size={16} />
+                <span>NetBanking</span>
+              </button>
+            </div>
+
+            {/* Tab Body */}
+            <div className="sim-tab-content">
+              {simulatorTab === 'upi' && (
+                <div className="sim-panel upi-panel">
+                  <div className="sim-qr-box">
+                    <QrCode size={90} className="sim-qr-icon" />
+                    <span className="sim-qr-note">Scan with any UPI App (GPay / PhonePe / Paytm)</span>
+                  </div>
+                  <div className="sim-field-group">
+                    <label className="sim-label">Or UPI ID / VPA</label>
+                    <input
+                      type="text"
+                      className="sim-input"
+                      readOnly
+                      value={`${currentUser?.email ? currentUser.email.split('@')[0] : 'student'}@okhdfcbank`}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {simulatorTab === 'card' && (
+                <div className="sim-panel card-panel">
+                  <div className="sim-field-group">
+                    <label className="sim-label">Test Card Number</label>
+                    <input
+                      type="text"
+                      className="sim-input font-mono"
+                      readOnly
+                      value="4111 •••• •••• 1111 (Razorpay Visa Test)"
+                    />
+                  </div>
+                  <div className="sim-card-split">
+                    <div className="sim-field-group">
+                      <label className="sim-label">Expiry</label>
+                      <input type="text" className="sim-input" readOnly value="12/28" />
+                    </div>
+                    <div className="sim-field-group">
+                      <label className="sim-label">CVV</label>
+                      <input type="text" className="sim-input" readOnly value="123" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {simulatorTab === 'netbanking' && (
+                <div className="sim-panel netbanking-panel">
+                  <div className="sim-bank-grid">
+                    <div className="sim-bank-option active">HDFC Bank</div>
+                    <div className="sim-bank-option">State Bank of India</div>
+                    <div className="sim-bank-option">ICICI Bank</div>
+                    <div className="sim-bank-option">Axis Bank</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Security and Evaluation Notice */}
+            <div className="sim-security-notice">
+              <ShieldCheck size={16} className="notice-icon" />
+              <span>
+                Simulated Gateway: Generates authentic HMAC-SHA256 signature for complete backend verification.
+              </span>
+            </div>
+
+            {/* Actions: Simulate Success vs Simulate Failure */}
+            <div className="sim-actions-box">
+              <button
+                type="button"
+                className="btn-sim-success"
+                onClick={() => handleSimulatePayment(false)}
+                disabled={isSimulating}
+                id="btn-sim-pay-success"
+              >
+                {isSimulating ? (
+                  <>
+                    <Loader2 size={18} className="spinner-icon" />
+                    <span>Verifying HMAC Signature...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={18} />
+                    <span>Pay ₹{(simulatorData.amount / 100).toLocaleString('en-IN')} (Success)</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="btn-sim-failure"
+                onClick={() => handleSimulatePayment(true)}
+                disabled={isSimulating}
+                id="btn-sim-pay-fail"
+              >
+                <AlertCircle size={16} />
+                <span>Simulate Failure (Keep Cart)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

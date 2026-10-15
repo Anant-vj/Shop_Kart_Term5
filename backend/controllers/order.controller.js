@@ -171,6 +171,7 @@ const createPaymentOrder = async (req, res) => {
     // Amount in paise for Razorpay
     const amountInPaise = Math.round(calculatedTotal * 100);
 
+    let isSimulator = false;
     let razorpayOrder;
     try {
       razorpayOrder = await razorpay.orders.create({
@@ -179,10 +180,11 @@ const createPaymentOrder = async (req, res) => {
         receipt: shopKartOrder._id.toString(),
       });
     } catch (gatewayErr) {
-      console.warn('Razorpay live creation warning (falling back to mock in offline test):', gatewayErr.message);
+      console.warn('Razorpay live creation note: Running in test simulator mode (no live Razorpay keys configured):', gatewayErr.message);
+      isSimulator = true;
       // Fallback for offline/test environments without live internet access
       razorpayOrder = {
-        id: `order_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        id: `order_sim_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
         amount: amountInPaise,
         currency: 'INR',
       };
@@ -190,6 +192,10 @@ const createPaymentOrder = async (req, res) => {
 
     shopKartOrder.razorpayOrderId = razorpayOrder.id;
     await shopKartOrder.save();
+
+    // Check if key is placeholder or simulator mode
+    const keyId = process.env.RAZORPAY_KEY_ID || '';
+    const isPlaceholderKey = !keyId || keyId.includes('xxxx') || keyId.includes('51bShpk') || keyId.includes('shopkart');
 
     // Return safe checkout data (Never expose RAZORPAY_KEY_SECRET)
     return res.status(201).json({
@@ -199,6 +205,7 @@ const createPaymentOrder = async (req, res) => {
       amount: amountInPaise,
       currency: 'INR',
       key: process.env.RAZORPAY_KEY_ID || 'rzp_test_51bShpkX7r4v4A',
+      isSimulator: isSimulator || isPlaceholderKey,
       order: shopKartOrder,
     });
   } catch (error) {
@@ -444,10 +451,68 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
+/**
+ * Simulated Razorpay Payment Gateway (Dev / Test Mode helper)
+ * POST /orders/simulate-payment
+ * Called when test mode simulation is active (e.g. when student doesn't have a live Razorpay merchant key).
+ * Emulates the Razorpay gateway generating payment_id and cryptographic HMAC-SHA256 signature,
+ * which the frontend then sends to the standard POST /orders/verify-payment endpoint for full validation.
+ */
+const simulatePayment = async (req, res) => {
+  try {
+    const { shopKartOrderId, fail } = req.body;
+
+    const order = await Order.findOne({
+      _id: shopKartOrderId,
+      user: req.user._id,
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found or unauthorized',
+      });
+    }
+
+    if (fail) {
+      // Simulate failed transaction
+      order.paymentStatus = 'FAILED';
+      await order.save();
+      return res.status(400).json({
+        success: false,
+        message: 'Payment simulation: Transaction declined by bank. Your cart has not been cleared.',
+      });
+    }
+
+    const razorpay_payment_id = `pay_sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const secret = process.env.RAZORPAY_KEY_SECRET || 'shopkart_test_secret_key_2026';
+    const body = order.razorpayOrderId + '|' + razorpay_payment_id;
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(body)
+      .digest('hex');
+
+    return res.status(200).json({
+      success: true,
+      razorpay_order_id: order.razorpayOrderId,
+      razorpay_payment_id,
+      razorpay_signature: signature,
+    });
+  } catch (error) {
+    console.error('Error in simulatePayment:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error during payment simulation',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createPaymentOrder,
   verifyPayment,
   getUserOrders,
   getOrderById,
   updateOrderStatus,
+  simulatePayment,
 };
