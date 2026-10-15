@@ -1,5 +1,6 @@
 const Customer = require('../models/customer.model');
 const generateToken = require('../utils/generateToken');
+const { cookieOptions } = generateToken;
 
 /**
  * Task 1 — Register a Customer
@@ -155,11 +156,10 @@ const getProfile = async (req, res) => {
  */
 const logoutCustomer = async (req, res) => {
   try {
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-    });
+    // Attributes must match those used when the cookie was set. maxAge is dropped
+    // because Express 4 would otherwise turn it into a future expiry and keep the cookie.
+    const { maxAge, ...clearOptions } = cookieOptions();
+    res.clearCookie('token', clearOptions);
 
     return res.status(200).json({
       success: true,
