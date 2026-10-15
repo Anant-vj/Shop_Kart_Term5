@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "ShopKart Full Stack E-Commerce Platform (Labs 01 & 02)",
   "scripts": {
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"blue,cyan\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "start": "concurrently -n \"BACKEND,FRONTEND\" -c \"blue,cyan\" \"npm run start:backend\" \"npm run dev:frontend\"",
     "start:backend": "npm --prefix backend start",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
@@ -20,5 +22,8 @@
     "express"
   ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
 }
